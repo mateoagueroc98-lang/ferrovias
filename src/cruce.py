@@ -1,13 +1,15 @@
-"""Cruce (merge) de varias tablas por columnas clave."""
+"""Cruce (merge) de varias tablas por coincidencias de columnas."""
 import datetime as dt
 
 import pandas as pd
 
 TIPOS = {
-    "Todas las filas del principal": "left",
-    "Solo filas que coinciden": "inner",
-    "Todas las filas de ambos": "outer",
+    "Todas las filas del documento principal": "left",
+    "Solo filas que coinciden en todos": "inner",
+    "Todas las filas de todos los documentos": "outer",
 }
+
+SEP = "::"  # separador interno documento::columna
 
 
 def _normalizar_valor(v):
@@ -27,47 +29,86 @@ def normalizar(serie: pd.Series) -> pd.Series:
     return serie.map(_normalizar_valor)
 
 
-def cruzar_varios(tablas: list[tuple[str, pd.DataFrame]], uniones: list[dict]):
-    """Une las tablas en cadena: la 1ª con la 2ª, el resultado con la 3ª, etc.
+def _fechas_sin_hora(df: pd.DataFrame) -> pd.DataFrame:
+    """Columnas de fecha cuyos valores no tienen hora -> solo fecha (sin 00:00:00)."""
+    for c in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[c]):
+            s = df[c].dropna()
+            if (s == s.dt.normalize()).all():
+                df[c] = df[c].dt.date
+    return df
 
-    uniones[i] describe cómo se une tablas[i + 1]:
-      {"pares": [((idx_tabla_anterior, columna), columna_de_esta_tabla), ...],
-       "tipo": "left" | "inner" | "outer"}
 
-    Devuelve (resultado, resumen) donde resumen es una lista de dicts con
-    cuántas filas coincidieron en cada unión.
+def cruzar(
+    tablas: dict[str, pd.DataFrame],
+    coincidencias: list[list[tuple[str, str]]],
+    principal: str,
+    tipo: str,
+    columnas_finales: dict[str, list[str]],
+):
+    """Une todos los documentos según las coincidencias.
+
+    coincidencias: cada una es una lista de (documento, columna) cuyos valores
+        tienen que ser iguales, ej. [("eventos", "N° INFRA"), ("mant", "Infraestructura")].
+    principal: documento desde el que se arranca.
+    tipo: "left" | "inner" | "outer".
+    columnas_finales: por documento, qué columnas quedan en el resultado (en orden).
+
+    Devuelve (resultado, resumen). Lanza ValueError si algún documento no está
+    conectado al resto por ninguna coincidencia.
     """
-    nombre0, df0 = tablas[0]
-    resultado = df0.copy()
-    # (idx_tabla, columna original) -> nombre de la columna en `resultado`
-    ubicacion = {(0, c): c for c in df0.columns}
+    def prefijar(doc):
+        return tablas[doc].rename(columns=lambda c: f"{doc}{SEP}{c}")
+
+    unidos = [principal]
+    resultado = prefijar(principal)
+    pendientes = [d for d in tablas if d != principal]
     resumen = []
 
-    for i, (nombre, df) in enumerate(tablas[1:], start=1):
-        union = uniones[i - 1]
-        der = df.copy()
+    while pendientes:
+        # Siguiente documento que tenga al menos una coincidencia con los ya unidos
+        for doc in pendientes:
+            pares = []
+            for coinc in coincidencias:
+                docs = dict(coinc)
+                if doc in docs:
+                    izq = next((d for d, _ in coinc if d in unidos), None)
+                    if izq is not None:
+                        pares.append((f"{izq}{SEP}{docs[izq]}", f"{doc}{SEP}{docs[doc]}"))
+            if pares:
+                break
+        else:
+            raise ValueError(
+                "Estos documentos no tienen ninguna coincidencia con los demás: "
+                + ", ".join(pendientes)
+            )
 
-        # Renombrar columnas que ya existen en el resultado para no pisarlas
-        renombres = {c: f"{c} ({nombre})" for c in der.columns if c in resultado.columns}
-        der = der.rename(columns=renombres)
-        for c in df.columns:
-            ubicacion[(i, c)] = renombres.get(c, c)
-
+        der = prefijar(doc)
         claves = []
-        for k, ((idx_izq, col_izq), col_der) in enumerate(union["pares"]):
+        for k, (col_izq, col_der) in enumerate(pares):
             clave = f"__clave{k}"
-            resultado[clave] = normalizar(resultado[ubicacion[(idx_izq, col_izq)]])
-            der[clave] = normalizar(der[ubicacion[(i, col_der)]])
+            resultado[clave] = normalizar(resultado[col_izq])
+            der[clave] = normalizar(der[col_der])
             claves.append(clave)
 
-        resultado = resultado.merge(der, on=claves, how=union["tipo"], indicator=True)
+        resultado = resultado.merge(der, on=claves, how=tipo, indicator=True)
         conteo = resultado["_merge"].value_counts()
         resumen.append({
-            "archivo": nombre,
-            "coinciden": int(conteo.get("both", 0)),
-            "sin coincidencia (anterior)": int(conteo.get("left_only", 0)),
-            "sin coincidencia (este archivo)": int(conteo.get("right_only", 0)),
+            "documento": doc,
+            "unido por": " + ".join(f"{a.split(SEP, 1)[1]} = {b.split(SEP, 1)[1]}" for a, b in pares),
+            "filas que coinciden": int(conteo.get("both", 0)),
+            "sin coincidencia (ya unidos)": int(conteo.get("left_only", 0)),
+            "sin coincidencia (este documento)": int(conteo.get("right_only", 0)),
         })
         resultado = resultado.drop(columns=claves + ["_merge"])
+        unidos.append(doc)
+        pendientes.remove(doc)
 
-    return resultado, resumen
+    # Columnas finales: nombre original; si se repite entre documentos, "col (doc)"
+    elegidas = [(d, c) for d in tablas for c in columnas_finales.get(d, [])]
+    nombres = [c for _, c in elegidas]
+    renombre = {
+        f"{d}{SEP}{c}": (c if nombres.count(c) == 1 else f"{c} ({d})") for d, c in elegidas
+    }
+    resultado = resultado[list(renombre)].rename(columns=renombre)
+    return _fechas_sin_hora(resultado), resumen

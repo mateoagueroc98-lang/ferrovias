@@ -2,8 +2,11 @@
 
 App local (Streamlit) para:
 - **Cruzar** dos o más Excels/CSVs por una o más columnas clave (tipo clave primaria), aunque las columnas tengan nombres distintos en cada archivo.
-- **Rellenar** celdas vacías de una columna usando Claude (API de Anthropic).
-- **Descargar** el resultado como `.xlsx`.
+- Elegir de cada documento qué columnas quedan en el resultado y **descargarlo** como `.xlsx`.
+
+Módulos (menú a la izquierda):
+- **Cruce de Excels**: lo de arriba.
+- **Relleno de Excel mediante PDF**: en desarrollo.
 
 Corre en tu compu y se abre en el navegador en `http://localhost:8501`. Los Excels **nunca** se suben a GitHub (están en `.gitignore`).
 
@@ -38,7 +41,7 @@ Corre en tu compu y se abre en el navegador en `http://localhost:8501`. Los Exce
 streamlit run app.py
 ```
 
-Se abre el navegador. Subí los dos archivos, elegí las columnas clave, cruzá, y opcionalmente rellená columnas con IA.
+Se abre el navegador. Subí los archivos, armá las coincidencias, elegí las columnas finales y cruzá.
 
 ## Trabajar desde dos computadoras
 
@@ -50,8 +53,10 @@ El `.env` (tu clave) y los Excels quedan solo en cada máquina; hay que crear el
 ## Estructura
 
 ```
-app.py          # interfaz Streamlit
-src/cruce.py    # lógica de cruce por claves
-src/ia.py       # relleno de celdas con Claude
+app.py                  # punto de entrada y menú de módulos
+modulos/cruce.py        # pantalla: Cruce de Excels
+modulos/relleno_pdf.py  # pantalla: Relleno de Excel mediante PDF (en desarrollo)
+src/cruce.py            # lógica del cruce por coincidencias
+src/ia.py               # llamadas a Claude (para el módulo de relleno)
 datos/          # poné acá tus Excels (ignorados por git)
 ```
