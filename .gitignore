@@ -1,0 +1,21 @@
+# Datos (nunca subir Excels/CSVs al repo)
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+
+# Secretos
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
