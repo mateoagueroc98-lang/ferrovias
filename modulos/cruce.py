@@ -1,5 +1,6 @@
 """Módulo: cruce de varios Excels por coincidencias de columnas."""
 import io
+import re
 
 import pandas as pd
 import streamlit as st
@@ -118,17 +119,26 @@ for coinc in coincidencias:
     repetidas |= {e for e in coinc if e != queda}
 # Si cambian las coincidencias o el principal, se recalculan las sugerencias
 firma = abs(hash((principal, tuple(sorted(usadas)))))
+
+
+def marcar_todas(claves: list[str], valor: bool):
+    for k in claves:
+        ss[k] = valor
+
+
 columnas_finales = {}
 for col, doc in zip(st.columns(len(docs)), docs):
     with col, st.container(border=True):
         st.markdown(f"**{doc}**")
+        claves = [f"fin_{firma}_{doc}_{i}" for i in range(len(tablas[doc].columns))]
+        b1, b2 = st.columns(2)
+        b1.button("☑ Todas", key=f"todas_{doc}", on_click=marcar_todas,
+                  args=(claves, True), use_container_width=True)
+        b2.button("☐ Ninguna", key=f"ninguna_{doc}", on_click=marcar_todas,
+                  args=(claves, False), use_container_width=True)
         columnas_finales[doc] = [
-            x for i, x in enumerate(tablas[doc].columns)
-            if st.checkbox(
-                x,
-                value=(doc, x) not in repetidas,
-                key=f"fin_{firma}_{doc}_{i}",
-            )
+            x for x, clave in zip(tablas[doc].columns, claves)
+            if st.checkbox(x, value=(doc, x) not in repetidas, key=clave)
         ]
 
 # ----------------------------------------------------------------- 4. Cruzar
@@ -152,6 +162,10 @@ if "resultado" in ss:
     st.caption(f"{len(res)} filas · {len(res.columns)} columnas")
     st.dataframe(res, hide_index=True)
 
+    nombre = st.text_input("Nombre del archivo a descargar", value="cruce")
+    # Sacar caracteres que Windows no acepta en nombres de archivo
+    nombre = re.sub(r'[\\/:*?"<>|]', "", nombre).strip().removesuffix(".xlsx") or "cruce"
+
     buffer = io.BytesIO()
     res.to_excel(buffer, index=False)
-    st.download_button("Descargar Excel", buffer.getvalue(), "cruce.xlsx")
+    st.download_button(f"Descargar {nombre}.xlsx", buffer.getvalue(), f"{nombre}.xlsx")
