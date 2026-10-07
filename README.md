@@ -1,7 +1,7 @@
 # Ferrovías – Automatización de Excels
 
 App local (Streamlit) para:
-- **Cruzar** dos Excels/CSVs por una o más columnas clave (tipo clave primaria).
+- **Cruzar** dos o más Excels/CSVs por una o más columnas clave (tipo clave primaria), aunque las columnas tengan nombres distintos en cada archivo.
 - **Rellenar** celdas vacías de una columna usando Claude (API de Anthropic).
 - **Descargar** el resultado como `.xlsx`.
 
@@ -14,8 +14,8 @@ Corre en tu compu y se abre en el navegador en `http://localhost:8501`. Los Exce
 3. Abrí *PowerShell* y cloná el repo:
    ```powershell
    cd $HOME\Documents
-   git clone https://github.com/mateoagueroc98-lang/ferrov-as.git
-   cd ferrov-as
+   git clone https://github.com/mateoagueroc98-lang/ferrovias.git
+   cd ferrovias
    ```
 4. Creá y activá un entorno virtual, e instalá dependencias:
    ```powershell
