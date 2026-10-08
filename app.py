@@ -9,5 +9,6 @@ st.set_page_config(page_title="Ferrovías - Excels", layout="wide")
 pagina = st.navigation([
     st.Page("modulos/cruce.py", title="Cruce de Excels", icon="🔗", default=True),
     st.Page("modulos/relleno_pdf.py", title="Relleno de Excel mediante PDF", icon="📄"),
+    st.Page("modulos/asociacion_lg_pcz.py", title="Asociación LG ↔ PCZ", icon="🧩"),
 ])
 pagina.run()

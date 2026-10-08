@@ -3,6 +3,10 @@
 *.xls
 *.xlsm
 *.csv
+# Excels INVENTADOS de prueba (sí se suben)
+!tests/ejemplos/*.xlsx
+# Sesiones guardadas del módulo Asociación LG ↔ PCZ (tienen datos internos)
+datos/sesiones/
 
 # Secretos
 .env
