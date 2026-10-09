@@ -13,6 +13,7 @@ modulos/<modulo>.py     # una pantalla por módulo (solo interfaz)
 src/<modulo>.py         # lógica de cada módulo (sin Streamlit, testeable)
 src/ia.py               # llamadas a Claude (API de Anthropic), compartido
 datos/                  # Excels locales del usuario (ignorados por git)
+tests/                  # tests con pytest + tests/ejemplos/ (Excels INVENTADOS, sí se suben)
 ```
 
 ## Módulos
@@ -21,11 +22,17 @@ datos/                  # Excels locales del usuario (ignorados por git)
 |---|---|---|---|
 | Cruce de Excels | `modulos/cruce.py` | `src/cruce.py` | Terminado |
 | Relleno de Excel mediante PDF | `modulos/relleno_pdf.py` | — | En desarrollo |
+| Asociación LG ↔ PCZ | `modulos/asociacion_lg_pcz.py` | `src/asociacion_lg_pcz.py` | MVP |
 
 **Cruce de Excels**: subir 2+ Excels/CSV, ver sus columnas lado a lado, armar coincidencias
 (documento + columna, una o varias, con 2+ documentos cada una), elegir documento principal y
 qué filas conservar, tildar columnas finales por documento (botones Todas/Ninguna), cruzar y
 descargar con nombre elegido. Las claves se normalizan (101 == 101.0, fechas sin hora, espacios).
+
+**Asociación LG ↔ PCZ**: asociar a mano filas del Libro de Guardia con novedades del PCZ. Candidatos
+solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple sin IA.
+Sesión autoguardada en `datos/sesiones/` (ignorado). Export con hojas LG_asociado, PCZ_completado y
+Resumen. Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
 
 ## Reglas
 
