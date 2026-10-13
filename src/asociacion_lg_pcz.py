@@ -428,6 +428,46 @@ def deshacer(sesion: dict) -> int | None:
     return ultimo["fila"]
 
 
+def grupos_de_fila(d: dict, n_avisos: int) -> list[dict]:
+    """Asociaciones guardadas de una fila como grupos [{"avisos": [...], "novedades": [...]}].
+
+    Cada grupo junta las novedades elegidas para los mismos avisos. Una novedad guardada
+    sin avisos (sesiones viejas) corresponde al párrafo entero.
+    """
+    if d["estado"] != "asociada":
+        return []
+    grupos: dict[tuple, list[str]] = {}
+    for nov in d["novedades"]:
+        renglones = tuple(sorted(d.get("avisos", {}).get(nov) or range(n_avisos)))
+        grupos.setdefault(renglones, []).append(nov)
+    return [{"avisos": list(k), "novedades": v} for k, v in grupos.items()]
+
+
+def unir_grupos(grupos: list[dict]) -> tuple[list[str], dict[str, list[int]]]:
+    """Grupos -> (novedades, {novedad: avisos}) para guardar con registrar()."""
+    novedades: list[str] = []
+    avisos_por_novedad: dict[str, set[int]] = {}
+    for g in grupos:
+        for nov in g["novedades"]:
+            if nov not in novedades:
+                novedades.append(nov)
+            avisos_por_novedad.setdefault(nov, set()).update(g["avisos"])
+    return novedades, {n: sorted(v) for n, v in avisos_por_novedad.items()}
+
+
+def avisos_cubiertos(grupos: list[dict]) -> set[int]:
+    return {i for g in grupos for i in g["avisos"]}
+
+
+def fila_con_avisos(fila_lg: pd.Series, renglones: list[int]) -> pd.Series:
+    """Copia de la fila de LG cuyo texto son solo los avisos elegidos (para puntuar)."""
+    elegidos = [fila_lg["avisos"][i] for i in renglones if 0 <= i < len(fila_lg["avisos"])]
+    fila = fila_lg.copy()
+    if elegidos:
+        fila["texto"] = " ".join(elegidos)
+    return fila
+
+
 def asociaciones_por_novedad(sesion: dict) -> dict[str, list[int]]:
     """id de novedad -> filas de LG (0-based) a las que está asociada."""
     salida: dict[str, list[int]] = {}
