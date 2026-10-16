@@ -45,58 +45,128 @@ if msg := ss.pop(P + "msg", None):
     getattr(st, msg[0])(msg[1])
 
 # ===================================================================== 1. Carga
+NO_TIENE = "— (no tiene) —"
+ORDEN = ["Fecha", "Transcripción", "Descripción", "N° Novedad", "Hora", "Página"]
+ARCHIVOS = [
+    # clave, título, columnas que hay que elegir, ayuda por columna
+    ("lg", "Libro de Guardia (LG)", a.COLUMNAS_LG, {
+        "Fecha": "Se usa para buscar las novedades de PCZ del mismo día.",
+        "Transcripción": "Texto del libro: cada renglón es un aviso.",
+        "Hora": "Opcional: ayuda a ordenar los candidatos por cercanía horaria.",
+        "Página": "Opcional: solo se muestra como referencia.",
+    }),
+    ("pcz", "Novedades PCZ", a.COLUMNAS_PCZ, {
+        "Fecha": "Se compara con la fecha de LG.",
+        "Descripción": "Texto de la novedad: se compara con los avisos de LG.",
+        "N° Novedad": "Número que identifica cada novedad.",
+    }),
+]
+
+
+def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict, firma: str) -> dict:
+    """Desplegables para indicar qué columna del archivo es cada dato.
+
+    Arranca con lo que reconoce por nombre; la elección queda guardada (por archivo) para
+    los otros pasos.
+    """
+    guardado = ss.get(P + "mapa_" + clave, {})
+    if guardado.get("_firma") != firma:  # archivo nuevo: sugerir por nombre
+        guardado = {"_firma": firma, **a.mapear_columnas(df, esperadas)[0]}
+    columnas = list(df.columns)
+    mapa = {"_firma": firma}
+    cols = st.columns(2)
+    # Primero los datos obligatorios, después los opcionales
+    orden = sorted(esperadas, key=lambda c: (clave == "lg" and c in a.OPCIONALES_LG,
+                                             ORDEN.index(c) if c in ORDEN else 99))
+    for k, canon in enumerate(orden):
+        opcional = canon in a.OPCIONALES_LG and clave == "lg"
+        opciones = ([NO_TIENE] if opcional else []) + columnas
+        actual = guardado.get(canon)
+        elegida = cols[k % 2].selectbox(
+            canon + (" (opcional)" if opcional else ""), opciones,
+            index=opciones.index(actual) if actual in opciones else (0 if opcional else None),
+            placeholder="Elegí la columna", help=ayudas.get(canon), key=f"{P}col_{clave}_{canon}_{firma}",
+        )
+        if elegida is not None and elegida != NO_TIENE:
+            mapa[canon] = elegida
+    ss[P + "mapa_" + clave] = mapa
+    return mapa
+
+
+def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, mostrar: bool):
+    """Sube (solo en el paso 1), lee el archivo y resuelve sus columnas.
+
+    Devuelve (tabla original, {dato: columna}) o None si falta algo.
+    """
+    if mostrar:
+        st.markdown(f"**{titulo}**")
+        subido = st.file_uploader(titulo, type=["xlsx", "xls", "csv"], key=P + "up_" + clave,
+                                  label_visibility="collapsed")
+        if subido is not None:
+            ss[P + clave] = {"nombre": subido.name, "bytes": subido.getvalue()}
+        elif P + clave in ss:
+            st.success(f"Cargado: {ss[P + clave]['nombre']}")
+    if P + clave not in ss:
+        return None
+    arch = ss[P + clave]
+    try:
+        df = leer(arch["nombre"], arch["bytes"])
+    except Exception as e:  # archivo dañado o con formato raro
+        st.error(f"No se pudo leer el archivo {arch['nombre']}: {e}")
+        return None
+    firma = a.huella(arch["bytes"])[:12]
+    if mostrar:
+        st.caption("Indicá qué columna del archivo corresponde a cada dato:")
+        mapa = elegir_columnas(clave, df, esperadas, ayudas, firma)
+    else:
+        mapa = ss.get(P + "mapa_" + clave, {})
+        if mapa.get("_firma") != firma:
+            mapa = {"_firma": firma, **a.mapear_columnas(df, esperadas)[0]}
+    mapa = {k: v for k, v in mapa.items() if k != "_firma"}
+
+    opcionales = a.OPCIONALES_LG if clave == "lg" else ()
+    if faltan := [c for c in ORDEN if c in esperadas and c not in mapa and c not in opcionales]:
+        if mostrar:
+            st.warning("Falta elegir: " + ", ".join(f"**{c}**" for c in faltan) + ".")
+        return None
+    if repetidas := sorted({c for c in mapa.values() if list(mapa.values()).count(c) > 1}):
+        st.error("Elegiste la misma columna para dos datos distintos: " + ", ".join(f"«{c}»" for c in repetidas))
+        return None
+    if mostrar:
+        st.caption("Así se ven las primeras filas con esas columnas:")
+        vista = df[list(mapa.values())].head(3).set_axis(list(mapa), axis=1)
+        vista.insert(list(mapa).index("Fecha") + 1, "Fecha (cómo la entiende la app)",
+                     vista["Fecha"].map(lambda v: a.formatear_fecha(a.parsear_fecha(v)) if a.parsear_fecha(v)
+                                        else "⚠️ no se entiende"))
+        st.dataframe(vista.astype(str), hide_index=True, use_container_width=True)
+    return df, mapa
+
+
 if paso == PASOS[0]:
     st.caption(
-        "Subí los dos Excel. Los originales **no se modifican**: la app trabaja sobre una copia y "
-        "el resultado se descarga en un Excel nuevo."
+        "Subí los dos Excel y elegí qué columna es cada dato. Los originales **no se modifican**: "
+        "la app trabaja sobre una copia y el resultado se descarga en un Excel nuevo."
     )
-    c1, c2 = st.columns(2)
-    for col, clave, titulo, columnas in [
-        (c1, "lg", "Libro de Guardia (LG)", "Página · Fecha · Hora · Transcripción"),
-        (c2, "pcz", "Novedades PCZ", "Descripción · Fecha · N° Novedad"),
-    ]:
-        with col, st.container(border=True):
-            st.markdown(f"**{titulo}**")
-            st.caption(f"Columnas necesarias: {columnas}")
-            subido = st.file_uploader(titulo, type=["xlsx", "xls", "csv"], key=P + "up_" + clave,
-                                      label_visibility="collapsed")
-            if subido is not None:
-                ss[P + clave] = {"nombre": subido.name, "bytes": subido.getvalue()}
-            elif P + clave in ss:
-                st.success(f"Cargado: {ss[P + clave]['nombre']}")
-
-if P + "lg" not in ss or P + "pcz" not in ss:
+    columnas_pantalla = st.columns(2)
+cargados = {}
+for k, (clave, titulo, esperadas, ayudas) in enumerate(ARCHIVOS):
     if paso == PASOS[0]:
-        st.info("Subí los dos archivos para empezar.")
+        with columnas_pantalla[k], st.container(border=True):
+            cargados[clave] = archivo(clave, titulo, esperadas, ayudas, mostrar=True)
     else:
-        st.info("Primero cargá los dos Excel en el paso **1. Carga**.")
+        cargados[clave] = archivo(clave, titulo, esperadas, ayudas, mostrar=False)
+
+if not all(cargados.values()):
+    if paso == PASOS[0]:
+        st.info("Subí los dos archivos y elegí sus columnas para seguir.")
+    else:
+        st.info("Primero cargá los dos Excel y elegí sus columnas en el paso **1. Carga**.")
     st.stop()
 
-# --------------------------------------------------- validación de columnas
+(lg_original, mapa_lg), (pcz_original, mapa_pcz) = cargados["lg"], cargados["pcz"]
+lg, pcz = preparar(ss[P + "lg"]["nombre"], ss[P + "lg"]["bytes"],
+                   ss[P + "pcz"]["nombre"], ss[P + "pcz"]["bytes"], mapa_lg, mapa_pcz)
 archivos = {"lg": ss[P + "lg"], "pcz": ss[P + "pcz"]}
-mapas, hay_error = {}, False
-for clave, esperadas, titulo in [("lg", a.COLUMNAS_LG, "LG"), ("pcz", a.COLUMNAS_PCZ, "PCZ")]:
-    try:
-        df = leer(archivos[clave]["nombre"], archivos[clave]["bytes"])
-    except Exception as e:  # archivo dañado o con formato raro
-        st.error(f"No se pudo leer el archivo de {titulo} ({archivos[clave]['nombre']}): {e}")
-        hay_error = True
-        continue
-    mapas[clave], faltan = a.mapear_columnas(df, esperadas)
-    if faltan:
-        hay_error = True
-        st.error(
-            f"Al archivo de **{titulo}** ({archivos[clave]['nombre']}) le falta: "
-            + ", ".join(f"**{f}**" for f in faltan)
-            + ".  \nColumnas que tiene: " + ", ".join(f"`{c}`" for c in df.columns)
-        )
-if hay_error:
-    st.stop()
-
-lg_original = leer(archivos["lg"]["nombre"], archivos["lg"]["bytes"])
-pcz_original = leer(archivos["pcz"]["nombre"], archivos["pcz"]["bytes"])
-lg, pcz = preparar(archivos["lg"]["nombre"], archivos["lg"]["bytes"],
-                   archivos["pcz"]["nombre"], archivos["pcz"]["bytes"], mapas["lg"], mapas["pcz"])
 if lg.empty:
     st.error("El archivo de LG no tiene filas.")
     st.stop()
@@ -134,38 +204,6 @@ if paso == PASOS[0]:
                 st.dataframe(malas, hide_index=True, use_container_width=True)
     if rep := a.ids_repetidos(pcz):
         st.warning("Hay N° de Novedad repetidos en PCZ (se tratan como una sola novedad): " + ", ".join(rep[:20]))
-
-    st.header("Sesión")
-    p = a.progreso(sesion)
-    st.caption(
-        "El progreso se guarda solo en cada paso (carpeta `datos/sesiones`). Si cerrás la app y "
-        "volvés a subir los mismos dos archivos, retomás donde quedaste."
-    )
-    st.markdown(f"Resueltas **{p['total'] - p['pendientes']}** de **{p['total']}** filas.")
-    c1, c2, c3 = st.columns(3)
-    c1.download_button("💾 Exportar sesión (.json)", a.sesion_a_json(sesion),
-                       f"sesion_lg_pcz_{huella}.json", mime="application/json")
-    importada = c2.file_uploader("📂 Importar sesión (.json)", type=["json"], key=P + "up_sesion")
-    if importada is not None and ss.get(P + "importada") != importada.file_id:
-        try:
-            nueva, avisos_ = a.importar_sesion(importada.getvalue().decode("utf-8"), len(lg), huella)
-        except (ValueError, UnicodeDecodeError) as e:
-            st.error(str(e))
-        else:
-            ss[P + "importada"] = importada.file_id
-            ss[P + "sesion"] = nueva
-            ss[P + "ver"] += 1
-            guardar()
-            ss[P + "msg"] = ("warning" if avisos_ else "success",
-                             " ".join(avisos_) or "Sesión importada.")
-            st.rerun()
-    with c3:
-        seguro = st.checkbox("Quiero borrar todo lo asociado")
-        if st.button("🗑️ Empezar de cero", disabled=not seguro):
-            ss[P + "sesion"] = a.sesion_nueva(huella, archivos["lg"]["nombre"], archivos["pcz"]["nombre"], len(lg))
-            ss[P + "ver"] += 1
-            guardar()
-            st.rerun()
 
     st.button("Ir a asociar ➡️", type="primary", on_click=ir_a_paso, args=(PASOS[1],))
     st.stop()

@@ -286,14 +286,24 @@ def avisos(transcripcion) -> list[str]:
     return [r.strip() for r in str(transcripcion).splitlines() if r.strip()]
 
 
+# Columnas que pueden no estar en el archivo de LG
+OPCIONALES_LG = ("Página", "Hora")
+
+
 def preparar_lg(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
-    """Tabla de trabajo de LG: una fila por párrafo, con fecha y hora ya normalizadas."""
+    """Tabla de trabajo de LG: una fila por párrafo, con fecha y hora ya normalizadas.
+
+    mapa: {nombre canónico: columna del archivo}. Página y Hora son opcionales.
+    """
+    vacia = pd.Series([None] * len(df), index=df.index, dtype=object)
+    pagina = df[mapa["Página"]] if "Página" in mapa else vacia
+    hora = df[mapa["Hora"]] if "Hora" in mapa else vacia
     t = pd.DataFrame({
-        "pagina": df[mapa["Página"]].map(lambda v: "" if pd.isna(v) else id_novedad(v)),
+        "pagina": pagina.map(lambda v: "" if pd.isna(v) else id_novedad(v)),
         "fecha_original": df[mapa["Fecha"]],
         "fecha": df[mapa["Fecha"]].map(parsear_fecha),
-        "hora": df[mapa["Hora"]].map(parsear_hora),
-        "hora_original": df[mapa["Hora"]],
+        "hora": hora.map(parsear_hora),
+        "hora_original": hora,
         "avisos": df[mapa["Transcripción"]].map(avisos),
     })
     t["texto"] = t["avisos"].map(" ".join)

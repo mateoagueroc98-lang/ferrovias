@@ -230,3 +230,18 @@ def test_puntaje_solo_con_avisos_elegidos():
                         "fecha": [F(2025, 3, 4)] * 2})
     c = a.candidatos(a.fila_con_avisos(fila, [1]), pcz)
     assert list(c["id"]) == ["2", "1"] and c.iloc[1]["puntaje"] == 0
+
+
+# ---------------------------------------------- columnas elegidas por el usuario
+def test_preparar_lg_con_columnas_de_otro_nombre_y_sin_opcionales():
+    df = pd.DataFrame({"Día": ["05/03/2025"], "Texto del libro": ["Señal 14\nCambio 7"]})
+    lg = a.preparar_lg(df, {"Fecha": "Día", "Transcripción": "Texto del libro"})
+    assert lg.loc[0, "fecha"] == F(2025, 3, 5)
+    assert lg.loc[0, "avisos"] == ["Señal 14", "Cambio 7"]
+    assert lg.loc[0, "pagina"] == "" and lg.loc[0, "hora"] is None
+
+
+def test_preparar_pcz_con_columnas_de_otro_nombre():
+    df = pd.DataFrame({"Detalle": ["Falla"], "F. evento": [45721], "ID": [7.0]})
+    pcz = a.preparar_pcz(df, {"Descripción": "Detalle", "Fecha": "F. evento", "N° Novedad": "ID"})
+    assert list(pcz["id"]) == ["7"] and pcz.loc[0, "fecha"] == F(2025, 3, 5)

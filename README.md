@@ -49,15 +49,15 @@ Se abre el navegador. Subí los archivos, armá las coincidencias, elegí las co
 Sirve para asociar cada fila del **Libro de Guardia (LG)** con la(s) novedad(es) del **PCZ** que le
 corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: no usa IA ni internet.
 
-**Archivos que necesita** (los nombres de columna toleran mayúsculas, tildes y espacios; ej. "N° Novedad",
-"Nº Novedad", "N Novedad", "Descripcion"):
-- **LG**: `Página | Fecha | Hora | Transcripción` — cada fila es un párrafo; cada renglón de la
-  transcripción es un aviso.
-- **PCZ**: `Descripción | Fecha | N° Novedad` — el N° de Novedad identifica cada fila.
+**Archivos que necesita** (las columnas pueden llamarse como sea: al cargar elegís cuál es cada dato):
+- **LG**: Fecha y Transcripción (obligatorias), Hora y Página (opcionales) — cada fila es un párrafo;
+  cada renglón de la transcripción es un aviso.
+- **PCZ**: Fecha, Descripción y N° Novedad — el N° de Novedad identifica cada fila.
 
 **Pasos**
-1. **Carga**: subí los dos Excel. Si falta una columna, la app dice cuál. Las filas con fecha que no
-   se entiende se listan (no se descartan).
+1. **Carga**: subí los dos Excel y, debajo de cada uno, elegí qué columna es cada dato (si se llaman
+   como siempre, ya vienen elegidas). La vista previa muestra cómo entiende la app cada fecha. Las
+   filas con fecha que no se entiende se listan (no se descartan).
 2. **Asociación**: la app recorre LG fila por fila, en dos pasos:
    - **Paso A**: tildás qué aviso(s) del párrafo vas a asociar (uno o varios). Si la fila tiene un
      solo aviso, este paso se saltea.
@@ -78,8 +78,8 @@ corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: n
    eventos RAMS) y `Resumen`.
 
 **Guardado**: el progreso se guarda solo en `datos/sesiones/` (no se sube a GitHub). Si cerrás la app y
-volvés a subir **los mismos dos archivos**, sigue donde quedaste. En el paso 1 podés exportar la
-sesión (.json) para llevarla a la otra compu e importarla allá. Los Excel originales nunca se modifican.
+volvés a subir **los mismos dos archivos**, sigue donde quedaste. El progreso no pasa de una compu a
+otra. Los Excel originales nunca se modifican.
 
 **Probarlo con datos inventados**: subí `tests/ejemplos/LG_ejemplo.xlsx` y `tests/ejemplos/PCZ_ejemplo.xlsx`
 (se regeneran con `python tests/generar_ejemplos.py`). Tests: `python -m pytest`.
@@ -90,8 +90,8 @@ sesión (.json) para llevarla a la otra compu e importarla allá. Los Excel orig
 - Se lee solo la **primera hoja** de cada Excel.
 - El puntaje es una ayuda simple (coincidencia de números y palabras, sin sinónimos ni abreviaturas:
   "PAN" y "P.A.N." no coinciden). Siempre se muestran todas las novedades del día.
-- Si cambiás algo en un Excel (aunque sea una celda), la app lo toma como archivos nuevos y empieza una
-  sesión nueva: usá "Importar sesión" con el .json exportado para recuperar lo hecho.
+- Si cambiás algo en un Excel (aunque sea una celda), la app lo toma como archivos nuevos y empieza
+  de cero.
 - Si cambiás de fila sin tocar «Asociar», lo tildado y no asociado se pierde.
 - Una fila de LG sin fecha válida no tiene candidatos automáticos: hay que usar el buscador.
 - Al exportar, las horas que venían como hora de Excel quedan como texto (ej. "08:15:00").
