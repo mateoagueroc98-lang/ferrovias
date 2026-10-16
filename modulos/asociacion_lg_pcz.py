@@ -371,6 +371,11 @@ def proxima_pendiente():
         mover(sig)
 
 
+st.html("""<style>
+[class*="st-key-tarjeta_"] { cursor: pointer; }
+[class*="st-key-tarjeta_"]:has(input:checked) { background: rgba(255, 75, 75, 0.10); }
+</style>""")
+
 pos = sesion["posicion"]
 fila = lg.loc[pos]
 guardada = sesion["filas"][str(pos)]
@@ -415,7 +420,7 @@ with st.container(border=True):
         st.markdown("**Paso A · ¿Qué aviso(s) vas a asociar?** Tocá una o varias tarjetas.")
         for i, aviso in enumerate(fila["avisos"]):
             novs = [nv for g in grupos if i in g["avisos"] for nv in g["novedades"]]
-            with st.container(border=True):
+            with st.container(border=True, key=f"tarjeta_a_{ver}_{pos}_{i}"):
                 c1, c2 = st.columns([1, 5])
                 clave = f"{P}aviso_{ver}_{pos}_{i}"
                 c1.checkbox(f"\\[{i + 1}\\] Aviso {i + 1}", value=i in b["avisos"], key=clave,
@@ -511,12 +516,25 @@ if b["etapa"] == "pcz":
 
     en_esta_fila = {nv: g["avisos"] for g in grupos for nv in g["novedades"]}
 
-    def mostrar(c: pd.DataFrame, inicio: int, etiqueta: str | None):
-        for k, (_, cand) in enumerate(c.iterrows(), start=inicio):
+    # Se dibujan de a tandas (las de mayor puntaje primero): dibujar cientos de tarjetas en
+    # cada clic hace lenta la pantalla. El buscador sigue buscando entre todas.
+    POR_TANDA = 15
+    clave_limite = f"{P}limite_{pos}"
+    limite = ss.get(clave_limite, POR_TANDA)
+
+    def ampliar(cantidad: int):
+        ss[clave_limite] = cantidad
+
+    def mostrar(c: pd.DataFrame, inicio: int, etiqueta: str | None, seccion: str) -> int:
+        """Dibuja las tarjetas de `c` (hasta el límite, más las ya tildadas). Devuelve cuántas dibujó."""
+        visibles = c.head(limite)
+        tildadas = c[c["id"].isin(b["novedades"]) & ~c.index.isin(visibles.index)]
+        visibles = pd.concat([visibles, tildadas])
+        for k, (_, cand) in enumerate(visibles.iterrows(), start=inicio):
             nov = cand["id"]
             elegida = nov in b["novedades"]
             otras = [f + 1 for f in asociadas_a.get(nov, []) if f != pos]
-            with st.container(border=True):
+            with st.container(border=True, key=f"tarjeta_n_{ver}_{pos}_{cand['fila_pcz']}"):
                 c1, c2 = st.columns([1, 5])
                 clave = f"{P}sel_{ver}_{pos}_{cand['fila_pcz']}"
                 c1.checkbox(f"\\[{k}\\] N° {nov}", value=elegida, key=clave, on_change=tildar,
@@ -541,27 +559,37 @@ if b["etapa"] == "pcz":
                 )
                 if elegida and otras:
                     c2.warning(f"Ya asociada a LG fila {', '.join(map(str, otras))}.")
+        if len(c) > len(visibles):
+            resto = len(c) - len(visibles)
+            st.caption(f"Se muestran {len(visibles)} de {len(c)}. Quedan {resto} con menor puntaje.")
+            k1, k2, _ = st.columns([1, 1, 3])
+            k1.button(f"⬇️ Mostrar {min(POR_TANDA, resto)} más", key=f"{P}mas_{seccion}_{ver}_{pos}",
+                      on_click=ampliar, args=(limite + POR_TANDA,), use_container_width=True)
+            k2.button(f"Mostrar todas ({len(c)})", key=f"{P}todas_{seccion}_{ver}_{pos}",
+                      on_click=ampliar, args=(len(c),), use_container_width=True)
+        return len(visibles)
 
     mismo = cands[~cands["otro_dia"]]
     otro = cands[cands["otro_dia"]]
     if fila["fecha"] is None:
         if not busqueda:
             st.info("Escribí en el buscador para buscar entre todas las novedades de PCZ.")
+            dibujadas = 0
         else:
-            mostrar(cands, 1, "SIN FECHA EN LG")
+            dibujadas = mostrar(cands, 1, "SIN FECHA EN LG", "todas")
     else:
         if mismo.empty:
             st.info("No hay novedades de PCZ " + ("que coincidan con la búsqueda " if busqueda else "")
                     + f"con fecha {a.formatear_fecha(fila['fecha'])}.")
-        mostrar(mismo, 1, None)
+        dibujadas = mostrar(mismo, 1, None, "mismo")
         if vecinos:
             st.markdown("##### 🌙 OTRO DÍA (día anterior / siguiente)")
             if otro.empty:
                 st.caption("No hay novedades del día anterior ni del siguiente.")
-            mostrar(otro, len(mismo) + 1, "OTRO DÍA")
+            dibujadas += mostrar(otro, dibujadas + 1, "OTRO DÍA", "otro")
     if len(sin_fecha):
         with st.expander(f"Novedades de PCZ sin fecha reconocible ({len(sin_fecha)})"):
-            mostrar(sin_fecha, len(cands) + 1, "SIN FECHA")
+            mostrar(sin_fecha, dibujadas + 1, "SIN FECHA", "sin_fecha")
 
 with st.expander("Lista de todas las filas de LG"):
     st.dataframe(pd.DataFrame({
@@ -609,47 +637,14 @@ window.parent.__lgpczTeclas = function (e) {
 doc.addEventListener('keydown', window.parent.__lgpczTeclas);
 
 // Tarjetas (avisos y novedades): un clic en cualquier parte de la tarjeta la tilda o destilda.
-// Una tarjeta es el bloque con borde más cercano que tiene una sola casilla "[n] ...".
-function casillaDeTarjeta(bloque) {
-  const casillas = bloque.querySelectorAll('[data-testid="stCheckbox"]');
-  if (casillas.length !== 1 || !casillas[0].innerText.trim().startsWith('[')) return null;
-  return casillas[0].querySelector('input');
-}
-function tarjeta(el) {
-  for (; el && el !== doc.body; el = el.parentElement) {
-    const id = el.getAttribute && el.getAttribute('data-testid');
-    if ((id === 'stVerticalBlock' || id === 'stVerticalBlockBorderWrapper') &&
-        window.parent.getComputedStyle(el).borderTopWidth !== '0px') {
-      return casillaDeTarjeta(el) ? el : null;
-    }
-  }
-  return null;
-}
 if (window.parent.__lgpczClic) doc.removeEventListener('click', window.parent.__lgpczClic);
 window.parent.__lgpczClic = function (e) {
   // La casilla y su texto ya funcionan solos; botones, links y campos tampoco se tocan
   if (e.target.closest('input, label, button, a, textarea, [data-baseweb="select"]')) return;
-  const t = tarjeta(e.target);
-  if (t) casillaDeTarjeta(t).click();
+  const tarjeta = e.target.closest('[class*="st-key-tarjeta_"]');
+  const casilla = tarjeta && tarjeta.querySelector('[data-testid="stCheckbox"] input');
+  if (casilla) casilla.click();
 };
 doc.addEventListener('click', window.parent.__lgpczClic);
-
-// Manito al pasar por encima y color de fondo en las tarjetas elegidas
-function pintar() {
-  doc.querySelectorAll('[data-testid="stCheckbox"] input').forEach(c => {
-    const t = tarjeta(c);
-    if (!t) return;
-    t.style.cursor = 'pointer';
-    t.style.background = c.checked ? 'rgba(255, 75, 75, 0.10)' : '';
-  });
-}
-if (window.parent.__lgpczObs) window.parent.__lgpczObs.disconnect();
-window.parent.__lgpczObs = new MutationObserver(pintar);
-window.parent.__lgpczObs.observe(doc.body, {subtree: true, childList: true, attributes: true,
-                                            attributeFilter: ['aria-checked', 'class']});
-if (window.parent.__lgpczPintar) doc.removeEventListener('change', window.parent.__lgpczPintar);
-window.parent.__lgpczPintar = pintar;
-doc.addEventListener('change', pintar);
-pintar();
 </script>
 """, height=0)

@@ -1,0 +1,12 @@
+# Configuración de la app (se aplica sola al correr "streamlit run app.py").
+
+[server]
+# No vigilar los archivos del proyecto: en un disco de red hace lenta la app.
+# (Si se cambia el código, hay que cerrar y volver a abrir la app.)
+fileWatcherType = "none"
+# Solo accesible desde esta compu: no pide permiso al firewall ni la ve nadie de la red.
+address = "localhost"
+
+[browser]
+# No mandar estadísticas de uso a Streamlit.
+gatherUsageStats = false

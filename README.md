@@ -68,6 +68,8 @@ corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: n
    - Si quedan avisos sin asociar, volvés al paso A para elegir otros, o tocás **Terminar fila y
      seguir**. Cada asociación se guarda al instante; se puede quitar con 🗑️ o con Deshacer.
    - "Ninguna corresponde" marca la fila entera como sin novedad en PCZ.
+   - Se muestran primero las 15 novedades con mejor puntaje; con "Mostrar 15 más" o "Mostrar todas"
+     aparecen las demás (el buscador busca siempre entre todas).
    - Avisos y novedades se muestran como tarjetas: un clic en cualquier parte de la tarjeta la
      tilda o destilda (las elegidas se pintan de color).
    - Atajos: **1–9** tildar aviso (paso A) o novedad (paso B) · **Enter** pasar al paso B / asociar ·
@@ -97,6 +99,10 @@ otra. Los Excel originales nunca se modifican.
 - Si cambiás de fila sin tocar «Asociar», lo tildado y no asociado se pierde.
 - Una fila de LG sin fecha válida no tiene candidatos automáticos: hay que usar el buscador.
 - Al exportar, las horas que venían como hora de Excel quedan como texto (ej. "08:15:00").
+
+La configuración de la app está en `.streamlit/config.toml`: solo se abre en tu compu (`localhost`),
+no manda estadísticas y no vigila los archivos (más rápido en discos de red; si se actualiza el código,
+cerrá y volvé a abrir la app).
 
 ## Trabajar desde dos computadoras
 
