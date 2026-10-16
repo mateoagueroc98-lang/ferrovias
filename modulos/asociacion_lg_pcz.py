@@ -412,14 +412,18 @@ with st.container(border=True):
 
     if b["etapa"] == "avisos":
         # ---------------------------------------------- Paso A: elegir avisos
-        st.markdown("**Paso A · ¿Qué aviso(s) vas a asociar?** Tildá uno o varios.")
+        st.markdown("**Paso A · ¿Qué aviso(s) vas a asociar?** Tocá una o varias tarjetas.")
         for i, aviso in enumerate(fila["avisos"]):
             novs = [nv for g in grupos if i in g["avisos"] for nv in g["novedades"]]
-            etiqueta = f"\\[{i + 1}\\] {_escapar(aviso)}"
-            if novs:
-                etiqueta += f"  —  :green[✔ asociado a N° {', '.join(novs)}]"
-            clave = f"{P}aviso_{ver}_{pos}_{i}"
-            st.checkbox(etiqueta, value=i in b["avisos"], key=clave, on_change=tildar, args=("avisos", i, clave))
+            with st.container(border=True):
+                c1, c2 = st.columns([1, 5])
+                clave = f"{P}aviso_{ver}_{pos}_{i}"
+                c1.checkbox(f"\\[{i + 1}\\] Aviso {i + 1}", value=i in b["avisos"], key=clave,
+                            on_change=tildar, args=("avisos", i, clave))
+                marca = ("<span style='background:#16a34a;color:#fff;padding:1px 6px;border-radius:4px'>"
+                         f"✔ asociado a N° {', '.join(novs)}</span><br>") if novs else ""
+                c2.markdown(marca + f"<span style='font-size:1.05rem'>{a.resaltar(aviso, set())}</span>",
+                            unsafe_allow_html=True)
         st.button("☑ Tildar todos", on_click=todos_los_avisos)
     else:
         # ------------------------------------- Paso B: avisos ya elegidos
@@ -603,5 +607,49 @@ window.parent.__lgpczTeclas = function (e) {
   if (b) b.click();
 };
 doc.addEventListener('keydown', window.parent.__lgpczTeclas);
+
+// Tarjetas (avisos y novedades): un clic en cualquier parte de la tarjeta la tilda o destilda.
+// Una tarjeta es el bloque con borde más cercano que tiene una sola casilla "[n] ...".
+function casillaDeTarjeta(bloque) {
+  const casillas = bloque.querySelectorAll('[data-testid="stCheckbox"]');
+  if (casillas.length !== 1 || !casillas[0].innerText.trim().startsWith('[')) return null;
+  return casillas[0].querySelector('input');
+}
+function tarjeta(el) {
+  for (; el && el !== doc.body; el = el.parentElement) {
+    const id = el.getAttribute && el.getAttribute('data-testid');
+    if ((id === 'stVerticalBlock' || id === 'stVerticalBlockBorderWrapper') &&
+        window.parent.getComputedStyle(el).borderTopWidth !== '0px') {
+      return casillaDeTarjeta(el) ? el : null;
+    }
+  }
+  return null;
+}
+if (window.parent.__lgpczClic) doc.removeEventListener('click', window.parent.__lgpczClic);
+window.parent.__lgpczClic = function (e) {
+  // La casilla y su texto ya funcionan solos; botones, links y campos tampoco se tocan
+  if (e.target.closest('input, label, button, a, textarea, [data-baseweb="select"]')) return;
+  const t = tarjeta(e.target);
+  if (t) casillaDeTarjeta(t).click();
+};
+doc.addEventListener('click', window.parent.__lgpczClic);
+
+// Manito al pasar por encima y color de fondo en las tarjetas elegidas
+function pintar() {
+  doc.querySelectorAll('[data-testid="stCheckbox"] input').forEach(c => {
+    const t = tarjeta(c);
+    if (!t) return;
+    t.style.cursor = 'pointer';
+    t.style.background = c.checked ? 'rgba(255, 75, 75, 0.10)' : '';
+  });
+}
+if (window.parent.__lgpczObs) window.parent.__lgpczObs.disconnect();
+window.parent.__lgpczObs = new MutationObserver(pintar);
+window.parent.__lgpczObs.observe(doc.body, {subtree: true, childList: true, attributes: true,
+                                            attributeFilter: ['aria-checked', 'class']});
+if (window.parent.__lgpczPintar) doc.removeEventListener('change', window.parent.__lgpczPintar);
+window.parent.__lgpczPintar = pintar;
+doc.addEventListener('change', pintar);
+pintar();
 </script>
 """, height=0)

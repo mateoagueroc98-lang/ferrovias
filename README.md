@@ -68,6 +68,8 @@ corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: n
    - Si quedan avisos sin asociar, volvés al paso A para elegir otros, o tocás **Terminar fila y
      seguir**. Cada asociación se guarda al instante; se puede quitar con 🗑️ o con Deshacer.
    - "Ninguna corresponde" marca la fila entera como sin novedad en PCZ.
+   - Avisos y novedades se muestran como tarjetas: un clic en cualquier parte de la tarjeta la
+     tilda o destilda (las elegidas se pintan de color).
    - Atajos: **1–9** tildar aviso (paso A) o novedad (paso B) · **Enter** pasar al paso B / asociar ·
      **← →** fila anterior/siguiente · **N** ninguna · **S** saltar (queda pendiente).
    - "Ver también día anterior / siguiente" (apagado por defecto) agrega esas novedades marcadas como
