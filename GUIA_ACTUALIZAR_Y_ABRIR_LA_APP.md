@@ -66,6 +66,30 @@ streamlit run app.py
 El nombre de la rama se ve en GitHub, en la pestaña **Pull requests** o en el menú de ramas.
 Para volver a la versión estable: `git checkout main`.
 
+### Borrar las asociaciones guardadas (módulo Asociación LG ↔ PCZ)
+
+Las asociaciones guardadas están en la carpeta `datos/sesiones`. Para empezar de cero:
+
+1. Cerrar la app con `Ctrl + C` en la Terminal.
+2. Borrar la carpeta:
+
+   ```bash
+   cd ~/Documents/ferrovias
+   rm -rf datos/sesiones
+   ```
+
+3. Abrir la app de nuevo (con el `(.venv)` activo):
+
+   ```bash
+   streamlit run app.py
+   ```
+
+4. En el navegador, **cerrar la pestaña vieja** de la app y abrir una nueva en
+   `http://localhost:8501`. Si no, la pestaña vieja puede seguir mostrando lo que tenía en memoria.
+
+> **Ojo:** esto borra todo el progreso guardado **en esta Mac**, de todos los pares de Excel.
+> Las asociaciones de la compu del trabajo no se tocan, porque están guardadas allá.
+
 ### Instalación (solo la primera vez en esta Mac)
 
 > Ya está hecha. Queda anotada por si hay que rehacerla.
@@ -96,3 +120,14 @@ Para volver a la versión estable: `git checkout main`.
 ## Trabajo – Windows
 
 *Pendiente: se completa cuando se configure la computadora del trabajo.*
+
+### Borrar las asociaciones guardadas (módulo Asociación LG ↔ PCZ)
+
+Mismos pasos que en la Mac, pero en **PowerShell** el comando para borrar la carpeta es:
+
+```powershell
+cd $HOME\Documents\ferrovias
+Remove-Item -Recurse -Force datos\sesiones
+```
+
+Esto borra solo lo guardado en la compu del trabajo; lo de la Mac no se toca.
