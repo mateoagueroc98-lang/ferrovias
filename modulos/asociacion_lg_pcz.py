@@ -1,6 +1,5 @@
 """Módulo: asociación manual de filas del Libro de Guardia (LG) con novedades del PCZ."""
 import re
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -12,7 +11,6 @@ st.title("Asociación LG ↔ PCZ")
 
 ss = st.session_state
 P = "lgpcz_"  # prefijo de las claves de este módulo en session_state
-CARPETA_SESIONES = Path(__file__).resolve().parent.parent / "datos" / "sesiones"
 PASOS = ["1. Carga", "2. Asociación", "3. Exportar"]
 
 
@@ -28,18 +26,13 @@ def preparar(nombre_lg, bytes_lg, nombre_pcz, bytes_pcz, mapa_lg, mapa_pcz):
     return lg, pcz
 
 
-def guardar():
-    try:
-        a.guardar_sesion(ss[P + "sesion"], CARPETA_SESIONES)
-    except OSError as e:
-        ss[P + "msg"] = ("error", f"No se pudo guardar el progreso: {e}")
-
-
 def ir_a_paso(paso: str):
     ss[P + "paso"] = paso
 
 
 paso = st.radio("Paso", PASOS, horizontal=True, key=P + "paso", label_visibility="collapsed")
+st.caption("⚠️ El progreso **no se guarda**: si cerrás la app o recargás la página, se pierde. "
+           "Antes de cerrar, descargá el Excel en **3. Exportar**.")
 
 if msg := ss.pop(P + "msg", None):
     getattr(st, msg[0])(msg[1])
@@ -171,20 +164,15 @@ if lg.empty:
     st.error("El archivo de LG no tiene filas.")
     st.stop()
 
-# ------------------------------------------------ sesión (autoguardado)
+# ------------------------------------------- estado del trabajo (en memoria)
+# No se guarda en disco: si se cargan otros archivos, se cierra la app o se recarga la página,
+# se empieza de cero.
 huella = a.huella(archivos["lg"]["bytes"], archivos["pcz"]["bytes"])
-if ss.get(P + "sesion", {}).get("huella") != huella:
-    previa = a.cargar_sesion(CARPETA_SESIONES, huella)
-    if previa and len(previa["filas"]) == len(lg):
-        ss[P + "sesion"] = previa
-        p = a.progreso(previa)
-        ss[P + "msg"] = ("info", f"Se retomó la sesión guardada de estos archivos: "
-                                 f"{p['total'] - p['pendientes']} de {p['total']} filas resueltas.")
-    else:
-        ss[P + "sesion"] = a.sesion_nueva(huella, archivos["lg"]["nombre"], archivos["pcz"]["nombre"], len(lg))
+if ss.get(P + "trabajo", {}).get("huella") != huella:
+    ss[P + "trabajo"] = a.trabajo_nuevo(huella, len(lg))
     ss[P + "ver"] = ss.get(P + "ver", 0) + 1
     st.rerun()
-sesion = ss[P + "sesion"]
+trabajo = ss[P + "trabajo"]
 ss.setdefault(P + "ver", 0)
 
 if paso == PASOS[0]:
@@ -210,7 +198,7 @@ if paso == PASOS[0]:
 
 # ================================================================== 3. Exportar
 if paso == PASOS[2]:
-    p = a.progreso(sesion)
+    p = a.progreso(trabajo)
     st.header("Exportar a Excel")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Filas de LG", p["total"])
@@ -219,7 +207,7 @@ if paso == PASOS[2]:
     m4.metric("Pendientes", p["pendientes"])
     if p["pendientes"]:
         st.warning(f"Quedan {p['pendientes']} fila(s) pendientes: se exportan con estado «Pendiente».")
-    multiples = {k: v for k, v in a.asociaciones_por_novedad(sesion).items() if len(v) > 1}
+    multiples = {k: v for k, v in a.asociaciones_por_novedad(trabajo).items() if len(v) > 1}
     if multiples:
         st.info("Novedades asociadas a más de una fila de LG (su «Texto LG» junta todos con « / »): "
                 + "; ".join(f"{k} → filas {', '.join(str(f + 1) for f in v)}" for k, v in multiples.items()))
@@ -231,7 +219,7 @@ if paso == PASOS[2]:
     nombre = st.text_input("Nombre del archivo a descargar", value="asociacion_LG_PCZ")
     # Sacar caracteres que Windows no acepta en nombres de archivo
     nombre = re.sub(r'[\\/:*?"<>|]', "", nombre).strip().removesuffix(".xlsx") or "asociacion_LG_PCZ"
-    st.download_button(f"⬇️ Descargar {nombre}.xlsx", a.exportar(lg_original, pcz_original, lg, pcz, sesion),
+    st.download_button(f"⬇️ Descargar {nombre}.xlsx", a.exportar(lg_original, pcz_original, lg, pcz, trabajo),
                        f"{nombre}.xlsx", type="primary")
     st.stop()
 
@@ -242,7 +230,7 @@ if paso == PASOS[2]:
 # Cada asociación (avisos -> novedades) se guarda al instante; si quedan avisos sin
 # asociar se vuelve al paso A.
 n = len(lg)
-asociadas_a = a.asociaciones_por_novedad(sesion)
+asociadas_a = a.asociaciones_por_novedad(trabajo)
 
 
 def _escapar(texto: str) -> str:
@@ -252,7 +240,7 @@ def _escapar(texto: str) -> str:
 
 def borrador() -> dict:
     """Elección en curso de la fila actual (paso, avisos y novedades tildados)."""
-    pos, ver = sesion["posicion"], ss[P + "ver"]
+    pos, ver = trabajo["posicion"], ss[P + "ver"]
     b = ss.get(P + "borrador")
     if not b or b["fila"] != pos or b["ver"] != ver:
         n_avisos = len(lg.loc[pos, "avisos"])
@@ -265,14 +253,13 @@ def borrador() -> dict:
 
 
 def grupos_actuales() -> list[dict]:
-    pos = sesion["posicion"]
-    return a.grupos_de_fila(sesion["filas"][str(pos)], len(lg.loc[pos, "avisos"]))
+    pos = trabajo["posicion"]
+    return a.grupos_de_fila(trabajo["filas"][str(pos)], len(lg.loc[pos, "avisos"]))
 
 
 def mover(destino: int):
-    sesion["posicion"] = max(0, min(n - 1, destino))
+    trabajo["posicion"] = max(0, min(n - 1, destino))
     ss[P + "ver"] += 1
-    guardar()
 
 
 def tildar(lista: str, valor, clave: str):
@@ -285,7 +272,7 @@ def tildar(lista: str, valor, clave: str):
 
 def todos_los_avisos():
     b = borrador()
-    b["avisos"] = list(range(len(lg.loc[sesion["posicion"], "avisos"])))
+    b["avisos"] = list(range(len(lg.loc[trabajo["posicion"], "avisos"])))
     ss[P + "ver"] += 1
     ss[P + "borrador"] = {**b, "ver": ss[P + "ver"]}
 
@@ -303,7 +290,7 @@ def volver_a_avisos():
 
 
 def siguiente_fila():
-    pos = sesion["posicion"]
+    pos = trabajo["posicion"]
     if pos == n - 1:
         ss[P + "msg"] = ("success", "Llegaste a la última fila. Revisá las pendientes o pasá a "
                                     "**3. Exportar**.")
@@ -312,13 +299,13 @@ def siguiente_fila():
 
 def asociar():
     """Guarda el grupo avisos -> novedades elegido y sigue."""
-    pos, b = sesion["posicion"], borrador()
+    pos, b = trabajo["posicion"], borrador()
     if not b["novedades"]:
         ss[P + "msg"] = ("error", "No elegiste ninguna novedad. Tildá al menos una o usá "
                                   "«Ninguna corresponde».")
         return
     grupos = grupos_actuales() + [{"avisos": sorted(b["avisos"]), "novedades": list(b["novedades"])}]
-    a.registrar(sesion, pos, "asociada", *a.unir_grupos(grupos))
+    a.registrar(trabajo, pos, "asociada", *a.unir_grupos(grupos))
     n_avisos = len(lg.loc[pos, "avisos"])
     faltan = n_avisos - len(a.avisos_cubiertos(grupos) & set(range(n_avisos)))
     if faltan > 0:
@@ -326,35 +313,32 @@ def asociar():
         ss[P + "msg"] = ("success", f"Asociado. Quedan {faltan} aviso(s) sin asociar: elegí otros o "
                                     "tocá «Terminar fila y seguir».")
         ss[P + "ver"] += 1
-        guardar()
     else:
         siguiente_fila()
 
 
 def quitar_grupo(i: int):
-    pos = sesion["posicion"]
+    pos = trabajo["posicion"]
     grupos = grupos_actuales()
     del grupos[i]
     if grupos:
-        a.registrar(sesion, pos, "asociada", *a.unir_grupos(grupos))
+        a.registrar(trabajo, pos, "asociada", *a.unir_grupos(grupos))
     else:
-        a.registrar(sesion, pos, "pendiente")
+        a.registrar(trabajo, pos, "pendiente")
     ss[P + "ver"] += 1
-    guardar()
 
 
 def accion(tipo: str):
-    pos = sesion["posicion"]
+    pos = trabajo["posicion"]
     if tipo == "ninguna":
-        a.registrar(sesion, pos, "ninguna")
+        a.registrar(trabajo, pos, "ninguna")
     elif tipo == "saltar":
-        a.registrar(sesion, pos, "pendiente")
+        a.registrar(trabajo, pos, "pendiente")
     elif tipo == "deshacer":
-        if a.deshacer(sesion) is None:
+        if a.deshacer(trabajo) is None:
             ss[P + "msg"] = ("info", "No hay nada para deshacer.")
             return
         ss[P + "ver"] += 1
-        guardar()
         return
     siguiente_fila()
 
@@ -364,7 +348,7 @@ def ir_a_fila():
 
 
 def proxima_pendiente():
-    sig = a.siguiente_pendiente(sesion, sesion["posicion"])
+    sig = a.siguiente_pendiente(trabajo, trabajo["posicion"])
     if sig is None:
         ss[P + "msg"] = ("success", "¡No quedan filas pendientes!")
     else:
@@ -391,9 +375,9 @@ st.html("""<style>
 .pasos .off { opacity: 0.4; }
 </style>""")
 
-pos = sesion["posicion"]
+pos = trabajo["posicion"]
 fila = lg.loc[pos]
-guardada = sesion["filas"][str(pos)]
+guardada = trabajo["filas"][str(pos)]
 b = borrador()
 ver = ss[P + "ver"]
 grupos = grupos_actuales()
@@ -436,7 +420,7 @@ def titulos_tabla(derecha: str):
 
 
 # ----------------------------------------------------------- barra superior
-p = a.progreso(sesion)
+p = a.progreso(trabajo)
 nav = st.columns([1, 4, 1], vertical_alignment="center")
 nav[0].button("⬅️ Anterior", on_click=mover, args=(pos - 1,), disabled=pos == 0, use_container_width=True)
 with nav[1]:
@@ -546,7 +530,7 @@ s1.button("🚫 Ninguna corresponde", on_click=accion, args=("ninguna",), use_co
 s2.button("⏭️ Saltar", on_click=accion, args=("saltar",), use_container_width=True,
           help="Deja la fila pendiente (borra lo asociado en ella) y pasa a la siguiente.")
 s3.button("↩️ Deshacer", on_click=accion, args=("deshacer",), use_container_width=True,
-          disabled=not sesion["historial"])
+          disabled=not trabajo["historial"])
 with s4.popover("🔎 Ir a…", use_container_width=True):
     st.number_input("Fila", 1, n, pos + 1, key=f"{P}ir_a_{ver}", on_change=ir_a_fila)
     st.button("Próxima pendiente", on_click=proxima_pendiente, use_container_width=True)
@@ -667,8 +651,8 @@ with st.expander("Lista de todas las filas de LG"):
     st.dataframe(pd.DataFrame({
         "Fila": range(1, n + 1),
         "Fecha": lg["fecha"].map(a.formatear_fecha),
-        "Estado": [a.ESTADOS[sesion["filas"][str(i)]["estado"]] for i in range(n)],
-        "Novedades": [";".join(sesion["filas"][str(i)]["novedades"]) for i in range(n)],
+        "Estado": [a.ESTADOS[trabajo["filas"][str(i)]["estado"]] for i in range(n)],
+        "Novedades": [";".join(trabajo["filas"][str(i)]["novedades"]) for i in range(n)],
         "Transcripción": lg["texto"].str.slice(0, 120),
     }), hide_index=True, use_container_width=True)
 

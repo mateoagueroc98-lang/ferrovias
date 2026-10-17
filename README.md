@@ -86,9 +86,9 @@ corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: n
    "Texto LG" y "Descripción combinada" = descripción PCZ + texto LG en minúsculas, para la tabla de
    eventos RAMS) y `Resumen`.
 
-**Guardado**: el progreso se guarda solo en `datos/sesiones/` (no se sube a GitHub). Si cerrás la app y
-volvés a subir **los mismos dos archivos**, sigue donde quedaste. El progreso no pasa de una compu a
-otra. Los Excel originales nunca se modifican.
+**El progreso no se guarda**: lo asociado vive solo mientras la app está abierta. Si cerrás la app,
+recargás la página o cargás otros archivos, se empieza de cero. Antes de cerrar, descargá el Excel en
+**3. Exportar**. Los Excel originales nunca se modifican.
 
 **Probarlo con datos inventados**: subí `tests/ejemplos/LG_ejemplo.xlsx` y `tests/ejemplos/PCZ_ejemplo.xlsx`
 (se regeneran con `python tests/generar_ejemplos.py`). Tests: `python -m pytest`.
@@ -99,8 +99,6 @@ otra. Los Excel originales nunca se modifican.
 - Se lee solo la **primera hoja** de cada Excel.
 - El puntaje es una ayuda simple (coincidencia de números y palabras, sin sinónimos ni abreviaturas:
   "PAN" y "P.A.N." no coinciden). Siempre se muestran todas las novedades del día.
-- Si cambiás algo en un Excel (aunque sea una celda), la app lo toma como archivos nuevos y empieza
-  de cero.
 - Si cambiás de fila sin tocar «Asociar», lo tildado y no asociado se pierde.
 - Una fila de LG sin fecha válida no tiene candidatos automáticos: hay que usar el buscador.
 - Al exportar, las horas que venían como hora de Excel quedan como texto (ej. "08:15:00").
@@ -125,7 +123,7 @@ modulos/relleno_pdf.py  # pantalla: Relleno de Excel mediante PDF (en desarrollo
 src/cruce.py            # lógica del cruce por coincidencias
 modulos/asociacion_lg_pcz.py  # pantalla: Asociación LG ↔ PCZ
 src/ia.py               # llamadas a Claude (para el módulo de relleno)
-src/asociacion_lg_pcz.py      # lógica de la asociación (fechas, candidatos, sesión, exportación)
+src/asociacion_lg_pcz.py      # lógica de la asociación (fechas, candidatos, exportación)
 tests/                  # tests (python -m pytest) y Excels de ejemplo inventados
 datos/          # poné acá tus Excels (ignorados por git)
 ```

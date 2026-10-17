@@ -7,10 +7,8 @@ import datetime as dt
 import hashlib
 import html
 import io
-import json
 import re
 import unicodedata
-from pathlib import Path
 
 import pandas as pd
 
@@ -391,21 +389,19 @@ def buscar(cands: pd.DataFrame, texto: str) -> pd.DataFrame:
     return cands[base.map(lambda b: all(p in b for p in palabras))]
 
 
-# ------------------------------------------------------------------ sesión
+# ----------------------------------------------- estado del trabajo (en memoria)
 def huella(*contenidos: bytes) -> str:
-    """Identifica el par de archivos para retomar la sesión correcta."""
+    """Identifica un archivo (o un par de archivos) para saber si se cargó otro."""
     h = hashlib.sha1()
     for c in contenidos:
         h.update(hashlib.sha1(c).digest())
     return h.hexdigest()[:16]
 
 
-def sesion_nueva(huella_archivos: str, nombre_lg: str, nombre_pcz: str, n_lg: int) -> dict:
+def trabajo_nuevo(huella_archivos: str, n_lg: int) -> dict:
+    """Estado del trabajo de asociación. Vive solo en memoria mientras la app está abierta."""
     return {
-        "version": 1,
         "huella": huella_archivos,
-        "archivo_lg": nombre_lg,
-        "archivo_pcz": nombre_pcz,
         "posicion": 0,
         # fila LG (str) -> {"estado", "novedades": [ids], "avisos": {id: [n° de renglón]}}
         "filas": {str(i): {"estado": "pendiente", "novedades": [], "avisos": {}} for i in range(n_lg)},
@@ -442,7 +438,7 @@ def grupos_de_fila(d: dict, n_avisos: int) -> list[dict]:
     """Asociaciones guardadas de una fila como grupos [{"avisos": [...], "novedades": [...]}].
 
     Cada grupo junta las novedades elegidas para los mismos avisos. Una novedad guardada
-    sin avisos (sesiones viejas) corresponde al párrafo entero.
+    sin avisos corresponde al párrafo entero.
     """
     if d["estado"] != "asociada":
         return []
@@ -516,49 +512,6 @@ def siguiente_pendiente(sesion: dict, desde: int) -> int | None:
         if sesion["filas"][str(i)]["estado"] == "pendiente":
             return i
     return None
-
-
-def guardar_sesion(sesion: dict, carpeta: Path) -> Path:
-    carpeta.mkdir(parents=True, exist_ok=True)
-    ruta = carpeta / f"sesion_{sesion['huella']}.json"
-    tmp = ruta.with_suffix(".tmp")
-    tmp.write_text(sesion_a_json(sesion), encoding="utf-8")
-    tmp.replace(ruta)  # escritura atómica: si se corta, no queda el JSON a medias
-    return ruta
-
-
-def cargar_sesion(carpeta: Path, huella_archivos: str) -> dict | None:
-    ruta = carpeta / f"sesion_{huella_archivos}.json"
-    if not ruta.exists():
-        return None
-    return json.loads(ruta.read_text(encoding="utf-8"))
-
-
-def sesion_a_json(sesion: dict) -> str:
-    return json.dumps(sesion, ensure_ascii=False, indent=1)
-
-
-def importar_sesion(texto: str, n_lg: int, huella_archivos: str) -> tuple[dict, list[str]]:
-    """Lee un JSON exportado. Devuelve (sesión, advertencias). Lanza ValueError si no sirve."""
-    try:
-        sesion = json.loads(texto)
-        filas = sesion["filas"]
-    except (ValueError, KeyError, TypeError) as e:
-        raise ValueError("El archivo no es una sesión válida de este módulo.") from e
-    avisos_ = []
-    if sesion.get("huella") != huella_archivos:
-        avisos_.append(
-            "La sesión fue hecha con otros archivos (o con una versión distinta de ellos). "
-            "Se cargó igual: revisá que las filas correspondan."
-        )
-    if len(filas) != n_lg:
-        avisos_.append(f"La sesión tiene {len(filas)} filas de LG y el archivo actual tiene {n_lg}.")
-    nuevas = sesion_nueva(huella_archivos, sesion.get("archivo_lg", ""), sesion.get("archivo_pcz", ""), n_lg)
-    for i in range(n_lg):
-        if str(i) in filas:
-            nuevas["filas"][str(i)] = filas[str(i)]
-    nuevas["posicion"] = min(int(sesion.get("posicion", 0)), max(n_lg - 1, 0))
-    return nuevas, avisos_
 
 
 # --------------------------------------------------------------- exportar

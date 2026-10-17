@@ -139,7 +139,7 @@ def test_candidatos_ordenados_y_todos_visibles():
     assert list(c["id"]) == ["4", "2"]  # se muestran todos los del día, el mejor primero
 
 
-# ------------------------------------------------------ sesión y exportación
+# ---------------------------------------- deshacer, progreso y exportación
 def _cargar_ejemplos(tmp_path):
     ruta_lg, ruta_pcz = generar(tmp_path)
     lg_df = a.leer_tabla(ruta_lg.name, ruta_lg.read_bytes())
@@ -159,7 +159,7 @@ def test_ejemplos_fechas_mezcladas(tmp_path):
 
 
 def test_deshacer_y_progreso():
-    s = a.sesion_nueva("h", "lg", "pcz", 3)
+    s = a.trabajo_nuevo("h", 3)
     a.registrar(s, 0, "asociada", ["1", "2"])
     a.registrar(s, 1, "ninguna")
     assert a.progreso(s) == {"total": 3, "asociadas": 1, "ninguna": 1, "pendientes": 1}
@@ -168,20 +168,9 @@ def test_deshacer_y_progreso():
     assert a.siguiente_pendiente(s, 0) == 1
 
 
-def test_guardar_e_importar(tmp_path):
-    s = a.sesion_nueva("h", "lg", "pcz", 2)
-    a.registrar(s, 1, "asociada", ["7"])
-    a.guardar_sesion(s, tmp_path)
-    assert a.cargar_sesion(tmp_path, "h")["filas"]["1"]["novedades"] == ["7"]
-    otra, avisos = a.importar_sesion(a.sesion_a_json(s), 2, "otra")
-    assert otra["filas"]["1"]["novedades"] == ["7"] and avisos
-    with pytest.raises(ValueError):
-        a.importar_sesion("no es json", 2, "h")
-
-
 def test_exportar(tmp_path):
     lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
-    s = a.sesion_nueva("h", "lg", "pcz", len(lg))
+    s = a.trabajo_nuevo("h", len(lg))
     a.registrar(s, 0, "asociada", ["1001", "1002"], {"1002": [1]})
     a.registrar(s, 1, "ninguna")
     a.registrar(s, 4, "asociada", ["1002"])  # 1002 en dos filas de LG
@@ -211,13 +200,13 @@ def test_grupos_ida_y_vuelta():
     novedades, avisos = a.unir_grupos(grupos)
     assert novedades == ["1", "2", "3"]
     assert avisos == {"1": [0], "2": [0], "3": [1, 2]}
-    s = a.sesion_nueva("h", "", "", 1)
+    s = a.trabajo_nuevo("h", 1)
     a.registrar(s, 0, "asociada", novedades, avisos)
     assert a.grupos_de_fila(s["filas"]["0"], 3) == grupos
     assert a.avisos_cubiertos(grupos) == {0, 1, 2}
 
 
-def test_grupos_sesion_vieja_sin_avisos_es_parrafo_entero():
+def test_grupos_sin_avisos_es_parrafo_entero():
     d = {"estado": "asociada", "novedades": ["9"], "avisos": {}}
     assert a.grupos_de_fila(d, 2) == [{"avisos": [0, 1], "novedades": ["9"]}]
     assert a.grupos_de_fila({"estado": "ninguna", "novedades": [], "avisos": {}}, 2) == []
