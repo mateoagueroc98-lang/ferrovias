@@ -372,8 +372,23 @@ def proxima_pendiente():
 
 
 st.html("""<style>
+/* Tarjetas que se eligen con un clic (avisos en el paso 1, novedades en el paso 2) */
 [class*="st-key-tarjeta_"] { cursor: pointer; }
 [class*="st-key-tarjeta_"]:has(input:checked) { background: rgba(255, 75, 75, 0.10); }
+/* Tarjetas fijas de la tabla LG ↔ PCZ */
+.tj { border: 1px solid rgba(128, 128, 128, 0.35); border-radius: 0.5rem; padding: 0.6rem 0.8rem;
+      margin-bottom: 0.5rem; line-height: 1.45; }
+.tj-lg, [class*="st-key-tarjeta_a_"] { border-left: 4px solid #ef4444 !important; }
+.tj-lg { font-size: 0.9rem; }
+.tj-pcz { border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.07); }
+.tj-vacia { border-style: dashed; opacity: 0.55; text-align: center; font-size: 0.9rem; }
+.tj-num { font-size: 0.78rem; font-weight: 600; opacity: 0.7; margin-bottom: 0.15rem; }
+.tj-aviso { font-size: 0.8rem; color: #f59e0b; margin-top: 0.25rem; }
+.col-titulo { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+              opacity: 0.55; margin-bottom: 0.3rem; }
+.flecha { text-align: center; font-size: 1.4rem; opacity: 0.45; padding-top: 0.6rem; }
+.pasos { font-size: 0.95rem; margin: 0.2rem 0 0.6rem 0; }
+.pasos .off { opacity: 0.4; }
 </style>""")
 
 pos = sesion["posicion"]
@@ -384,29 +399,71 @@ ver = ss[P + "ver"]
 grupos = grupos_actuales()
 cubiertos = a.avisos_cubiertos(grupos)
 n_avisos = len(fila["avisos"])
+desc_por_id = dict(zip(pcz["id"], pcz["descripcion"]))
+fecha_por_id = dict(zip(pcz["id"], pcz["fecha"]))
 
-# ------------------------------------------------------------------ progreso
+
+def html_lg(texto: str) -> str:
+    return f"<div class='tj tj-lg'>{a.resaltar(texto, set())}</div>"
+
+
+def html_pcz(nov: str) -> str:
+    otras = [f + 1 for f in asociadas_a.get(nov, []) if f != pos]
+    aviso_otras = (f"<div class='tj-aviso'>⚠️ también asociada a LG fila {', '.join(map(str, otras))}</div>"
+                   if otras else "")
+    return (f"<div class='tj tj-pcz'><div class='tj-num'>N° {nov} · {a.formatear_fecha(fecha_por_id.get(nov))}"
+            f"</div>{a.resaltar(desc_por_id.get(nov, '(no está en el archivo de PCZ)'), set())}{aviso_otras}</div>")
+
+
+def html_vacia(texto: str) -> str:
+    return f"<div class='tj tj-vacia'>{texto}</div>"
+
+
+def fila_tabla(izquierda, derecha, flecha: bool = True):
+    """Una fila de la tabla: tarjetas de LG a la izquierda y de PCZ a la derecha, a la misma altura."""
+    c1, c2, c3 = st.columns([10, 1, 10])
+    with c1:
+        izquierda()
+    c2.markdown(f"<div class='flecha'>{'→' if flecha else ''}</div>", unsafe_allow_html=True)
+    with c3:
+        derecha()
+
+
+def titulos_tabla(derecha: str):
+    c1, _, c3 = st.columns([10, 1, 10])
+    c1.markdown("<div class='col-titulo'>📘 Libro de Guardia</div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='col-titulo'>📋 {derecha}</div>", unsafe_allow_html=True)
+
+
+# ----------------------------------------------------------- barra superior
 p = a.progreso(sesion)
-st.progress((p["total"] - p["pendientes"]) / p["total"])
-m1, m2, m3, m4, m5 = st.columns(5)
-m1.metric("Fila", f"{pos + 1} de {n}")
-m2.metric("Asociadas", p["asociadas"])
-m3.metric("Ninguna corresponde", p["ninguna"])
-m4.metric("Pendientes", p["pendientes"])
-with m5:
-    st.number_input("Ir a fila", 1, n, pos + 1, key=f"{P}ir_a_{ver}", on_change=ir_a_fila)
-    st.button("Próxima pendiente", on_click=proxima_pendiente, use_container_width=True)
+nav = st.columns([1, 4, 1], vertical_alignment="center")
+nav[0].button("⬅️ Anterior", on_click=mover, args=(pos - 1,), disabled=pos == 0, use_container_width=True)
+with nav[1]:
+    st.markdown(
+        f"<div style='text-align:center'><b>Fila {pos + 1} de {n}</b> &nbsp;·&nbsp; ✅ {p['asociadas']} "
+        f"asociadas &nbsp;·&nbsp; 🚫 {p['ninguna']} ninguna &nbsp;·&nbsp; ⏳ {p['pendientes']} pendientes</div>",
+        unsafe_allow_html=True)
+    st.progress((p["total"] - p["pendientes"]) / p["total"])
+nav[2].button("➡️ Siguiente", on_click=mover, args=(pos + 1,), disabled=pos == n - 1, use_container_width=True)
 
 # --------------------------------------------------------------- fila de LG
 ESTADO_ICONO = {"asociada": "✅ Asociada", "ninguna": "🚫 Ninguna corresponde", "pendiente": "⏳ Pendiente"}
 with st.container(border=True):
     hora = a.formatear_hora(fila["hora"]) if pd.notna(fila["hora"]) else (
         "" if pd.isna(fila["hora_original"]) else str(fila["hora_original"]))
+    h1, h2 = st.columns([4, 1], vertical_alignment="center")
+    h1.subheader(f"LG fila {pos + 1}", anchor=False)
+    h1.caption(f"Página {fila['pagina'] or '—'} · {a.formatear_fecha(fila['fecha'])} · {hora or 'sin hora'}")
+    h2.markdown(f"<div style='text-align:right'>{ESTADO_ICONO[guardada['estado']]}</div>", unsafe_allow_html=True)
+    en_paso_1 = b["etapa"] == "avisos"
     st.markdown(
-        f"#### LG fila {pos + 1} &nbsp;·&nbsp; Página {fila['pagina'] or '—'} &nbsp;·&nbsp; "
-        f"{a.formatear_fecha(fila['fecha'])} &nbsp;·&nbsp; {hora or 'sin hora'}"
-    )
-    st.caption(f"Estado guardado: {ESTADO_ICONO[guardada['estado']]}")
+        "<div class='pasos'>"
+        + ("<b>① Elegí los avisos</b>" if en_paso_1 else "<span class='off'>① Elegí los avisos</span>")
+        + " &nbsp;›&nbsp; "
+        + ("<b>② Elegí las novedades de PCZ</b>" if not en_paso_1
+           else "<span class='off'>② Elegí las novedades de PCZ</span>")
+        + "</div>", unsafe_allow_html=True)
     if fila["fecha"] is None:
         st.error(
             f"La fecha de esta fila no se pudo interpretar (viene como «{fila['fecha_original']}»). "
@@ -415,85 +472,99 @@ with st.container(border=True):
     if not n_avisos:
         st.warning("Esta fila no tiene transcripción.")
 
-    if b["etapa"] == "avisos":
-        # ---------------------------------------------- Paso A: elegir avisos
-        st.markdown("**Paso A · ¿Qué aviso(s) vas a asociar?** Tocá una o varias tarjetas.")
-        for i, aviso in enumerate(fila["avisos"]):
-            novs = [nv for g in grupos if i in g["avisos"] for nv in g["novedades"]]
-            with st.container(border=True, key=f"tarjeta_a_{ver}_{pos}_{i}"):
-                c1, c2 = st.columns([1, 5])
-                clave = f"{P}aviso_{ver}_{pos}_{i}"
-                c1.checkbox(f"\\[{i + 1}\\] Aviso {i + 1}", value=i in b["avisos"], key=clave,
-                            on_change=tildar, args=("avisos", i, clave))
-                marca = ("<span style='background:#16a34a;color:#fff;padding:1px 6px;border-radius:4px'>"
-                         f"✔ asociado a N° {', '.join(novs)}</span><br>") if novs else ""
-                c2.markdown(marca + f"<span style='font-size:1.05rem'>{a.resaltar(aviso, set())}</span>",
-                            unsafe_allow_html=True)
-        st.button("☑ Tildar todos", on_click=todos_los_avisos)
-    else:
-        # ------------------------------------- Paso B: avisos ya elegidos
-        st.markdown("**Paso B · Elegí la(s) novedad(es) de PCZ para:**")
-        st.markdown(
-            "<ol style='font-size:1.05rem;line-height:1.6'>"
-            + "".join(
-                f"<li value='{i + 1}'><b>{a.resaltar(x, set())}</b></li>" if i in b["avisos"]
-                else f"<li value='{i + 1}' style='opacity:0.4'>{a.resaltar(x, set())}</li>"
-                for i, x in enumerate(fila["avisos"]))
-            + "</ol>",
-            unsafe_allow_html=True,
-        )
+    def tabla_guardada(elegibles: bool):
+        """Tabla LG ↔ PCZ con lo guardado. Con elegibles=True, los avisos son tarjetas para tildar."""
+        dibujados = set()
+        for k, f in enumerate(a.filas_de_tabla(grupos, n_avisos)):
+            grupo = f["novedades"] and next(i for i, g in enumerate(grupos) if g["avisos"] == f["avisos"]
+                                           and g["novedades"] == f["novedades"])
 
-    if grupos:
-        st.markdown("**Asociaciones guardadas en esta fila:**")
-        for i, g in enumerate(grupos):
-            c1, c2 = st.columns([6, 1])
-            c1.markdown("Aviso(s) " + ", ".join(str(x + 1) for x in g["avisos"]) + " → "
-                        + ", ".join(f"N° {nv}" for nv in g["novedades"]))
-            c2.button("🗑️ Quitar", key=f"{P}quitar_{ver}_{pos}_{i}", on_click=quitar_grupo, args=(i,))
-        if n_avisos and len(cubiertos) < n_avisos:
-            st.caption(f"Quedan {n_avisos - len(cubiertos)} aviso(s) sin asociar.")
+            def izquierda(f=f):
+                for i in f["avisos"]:
+                    if elegibles and i not in dibujados:
+                        dibujados.add(i)
+                        with st.container(border=True, key=f"tarjeta_a_{ver}_{pos}_{i}"):
+                            clave = f"{P}aviso_{ver}_{pos}_{i}"
+                            st.checkbox(f"\\[{i + 1}\\] {_escapar(fila['avisos'][i])}", value=i in b["avisos"],
+                                        key=clave, on_change=tildar, args=("avisos", i, clave))
+                    else:
+                        st.markdown(html_lg(f"[{i + 1}] {fila['avisos'][i]}"), unsafe_allow_html=True)
 
-# ----------------------------------------------------------------- botones
-with st.container(border=True):
-    if b["etapa"] == "avisos":
-        c = st.columns([1.6, 1.6, 1.4, 1, 1])
+            def derecha(f=f, k=k, grupo=grupo):
+                if not f["novedades"]:
+                    st.markdown(html_vacia("sin novedad asociada"), unsafe_allow_html=True)
+                    return
+                st.markdown("".join(html_pcz(nv) for nv in f["novedades"]), unsafe_allow_html=True)
+                st.button("🗑️ Quitar esta asociación", key=f"{P}quitar_{ver}_{pos}_{k}",
+                          on_click=quitar_grupo, args=(grupo,))
+
+            fila_tabla(izquierda, derecha, flecha=bool(f["novedades"]))
+
+    if en_paso_1:
+        # ------------------------------------------- Paso 1: elegir avisos
+        st.caption("Tocá uno o varios avisos (las tarjetas de la izquierda) y después «Elegir novedades».")
+        titulos_tabla("Novedades PCZ asociadas")
+        tabla_guardada(elegibles=True)
+        c = st.columns([1.3, 1.3, 1, 2])
         c[0].button("➡️ Elegir novedades", type="primary", on_click=ir_a_novedades,
                     disabled=not b["avisos"], use_container_width=True)
         c[1].button("✅ Terminar fila y seguir", on_click=siguiente_fila, disabled=not grupos,
                     use_container_width=True, help="Deja guardado lo asociado y pasa a la siguiente fila.")
-        atajos = ("**1–9** tildar aviso · **Enter** elegir novedades (o terminar la fila si ya asociaste) · ")
+        if n_avisos > 1:
+            c[2].button("☑ Todos", on_click=todos_los_avisos, use_container_width=True,
+                        help="Tilda todos los avisos del párrafo.")
     else:
-        if b["novedades"]:
-            st.markdown("**Novedades elegidas:** " + ", ".join(f"N° {x}" for x in b["novedades"]))
-            for nov in b["novedades"]:
-                otras = [f + 1 for f in asociadas_a.get(nov, []) if f != pos]
-                if otras:
-                    st.warning(f"La novedad {nov} ya está asociada a LG fila {', '.join(map(str, otras))}.")
-        else:
-            st.markdown("**Novedades elegidas:** ninguna todavía. Tildalas en la lista de abajo.")
-        c = st.columns([1.6, 1.6, 1.4, 1, 1])
-        c[0].button("✅ Asociar", type="primary", on_click=asociar, use_container_width=True)
+        # ------------------------------------- Paso 2: nueva asociación
+        st.caption("Tildá abajo una o varias novedades: van apareciendo a la derecha. Después tocá «Asociar».")
+        titulos_tabla("Novedades elegidas")
+
+        def izquierda_nueva():
+            for i in b["avisos"]:
+                st.markdown(html_lg(f"[{i + 1}] {fila['avisos'][i]}"), unsafe_allow_html=True)
+
+        def derecha_nueva():
+            if b["novedades"]:
+                st.markdown("".join(html_pcz(nv) for nv in b["novedades"]), unsafe_allow_html=True)
+            else:
+                st.markdown(html_vacia("todavía ninguna ↓ elegila en la lista de abajo"), unsafe_allow_html=True)
+
+        fila_tabla(izquierda_nueva, derecha_nueva)
+        c = st.columns([1.3, 1.3, 3])
+        c[0].button("✅ Asociar", type="primary", on_click=asociar, disabled=not b["novedades"],
+                    use_container_width=True)
         c[1].button("⬅️ Volver a elegir avisos", on_click=volver_a_avisos, disabled=n_avisos <= 1,
                     use_container_width=True)
-        atajos = "**1–9** tildar novedad · **Enter** asociar · "
-    c[2].button("🚫 Ninguna corresponde", on_click=accion, args=("ninguna",), use_container_width=True,
-                help="Marca toda la fila como sin novedad en PCZ.")
-    c[3].button("⏭️ Saltar", on_click=accion, args=("saltar",), use_container_width=True,
-                help="Deja la fila pendiente (borra lo asociado en ella) y pasa a la siguiente.")
-    c[4].button("↩️ Deshacer", on_click=accion, args=("deshacer",), use_container_width=True,
-                disabled=not sesion["historial"])
-    n1, _, n2 = st.columns([1, 4, 1])
-    n1.button("⬅️ Anterior", on_click=mover, args=(pos - 1,), disabled=pos == 0, use_container_width=True)
-    n2.button("➡️ Siguiente", on_click=mover, args=(pos + 1,), disabled=pos == n - 1, use_container_width=True)
-    st.caption("Atajos: " + atajos + "**← →** fila anterior/siguiente · **N** ninguna corresponde · "
-               "**S** saltar. (No funcionan mientras escribís en el buscador.)")
+        if grupos:
+            with st.expander(f"Asociaciones ya guardadas en esta fila ({len(grupos)})"):
+                titulos_tabla("Novedades PCZ asociadas")
+                tabla_guardada(elegibles=False)
+
+# ---------------------------------------------------- acciones secundarias
+s1, s2, s3, s4, s5 = st.columns([1.4, 1, 1, 1, 1.2])
+s1.button("🚫 Ninguna corresponde", on_click=accion, args=("ninguna",), use_container_width=True,
+          help="Marca toda la fila como sin novedad en PCZ y pasa a la siguiente.")
+s2.button("⏭️ Saltar", on_click=accion, args=("saltar",), use_container_width=True,
+          help="Deja la fila pendiente (borra lo asociado en ella) y pasa a la siguiente.")
+s3.button("↩️ Deshacer", on_click=accion, args=("deshacer",), use_container_width=True,
+          disabled=not sesion["historial"])
+with s4.popover("🔎 Ir a…", use_container_width=True):
+    st.number_input("Fila", 1, n, pos + 1, key=f"{P}ir_a_{ver}", on_change=ir_a_fila)
+    st.button("Próxima pendiente", on_click=proxima_pendiente, use_container_width=True)
+with s5.popover("⌨️ Atajos", use_container_width=True):
+    st.markdown("- **1–9**: tildar aviso (paso 1) o novedad (paso 2)\n"
+                "- **Enter**: elegir novedades / asociar\n"
+                "- **← →**: fila anterior / siguiente\n"
+                "- **N**: ninguna corresponde · **S**: saltar\n\n"
+                "No funcionan mientras escribís en el buscador.")
 
 # -------------------------------------------------------------- candidatos
 if b["etapa"] == "pcz":
-    st.subheader("Novedades de PCZ candidatas")
-    f1, f2 = st.columns([3, 2])
+    st.subheader("Novedades de PCZ " + (f"del {a.formatear_fecha(fila['fecha'])}" if fila["fecha"] else ""),
+                 anchor=False)
+    f1, f2 = st.columns([3, 2], vertical_alignment="bottom")
     busqueda = f1.text_input("🔎 Buscar en las novedades", key=f"{P}buscar_{pos}",
-                             placeholder="Ej.: Boulogne 14  (filtra por N° o descripción)")
+                             placeholder="Ej.: Boulogne 14  (filtra por N° o descripción)",
+                             label_visibility="collapsed")
     vecinos = f2.toggle("Ver también día anterior / siguiente", key=P + "vecinos",
                         help="Para eventos que cruzan la medianoche. Se muestran marcados como OTRO DÍA.")
 
@@ -509,10 +580,11 @@ if b["etapa"] == "pcz":
     sin_fecha = a.buscar(a.pcz_sin_fecha(fila_sel, pcz), busqueda)
 
     if fila["fecha"] is not None:
-        st.caption(f"{del_dia} novedad(es) del {a.formatear_fecha(fila['fecha'])}"
+        st.caption(f"{del_dia} novedad(es) ese día"
                    + (f" · {len(cands)} coinciden con la búsqueda" if busqueda else "")
-                   + ". Puntaje (con los avisos elegidos): número compartido 3 (1 si es de una cifra) · "
-                     "palabra compartida 1 · hora cercana hasta 3. Se resaltan las coincidencias.")
+                   + " · ordenadas por parecido con los avisos elegidos (en amarillo, lo que coincide)",
+                   help="Puntaje: número compartido 3 (1 si es de una cifra) · palabra compartida 1 · "
+                        "hora cercana hasta 3.")
 
     en_esta_fila = {nv: g["avisos"] for g in grupos for nv in g["novedades"]}
 

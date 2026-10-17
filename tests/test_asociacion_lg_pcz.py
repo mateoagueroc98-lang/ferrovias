@@ -245,3 +245,14 @@ def test_preparar_pcz_con_columnas_de_otro_nombre():
     df = pd.DataFrame({"Detalle": ["Falla"], "F. evento": [45721], "ID": [7.0]})
     pcz = a.preparar_pcz(df, {"Descripción": "Detalle", "Fecha": "F. evento", "N° Novedad": "ID"})
     assert list(pcz["id"]) == ["7"] and pcz.loc[0, "fecha"] == F(2025, 3, 5)
+
+
+def test_filas_de_tabla_incluye_avisos_sin_asociar_en_orden():
+    grupos = [{"avisos": [2], "novedades": ["9"]}, {"avisos": [0], "novedades": ["5", "6"]}]
+    assert a.filas_de_tabla(grupos, 4) == [
+        {"avisos": [0], "novedades": ["5", "6"]},
+        {"avisos": [1], "novedades": []},
+        {"avisos": [2], "novedades": ["9"]},
+        {"avisos": [3], "novedades": []},
+    ]
+    assert a.filas_de_tabla([], 0) == []

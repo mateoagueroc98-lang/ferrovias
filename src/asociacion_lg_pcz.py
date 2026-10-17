@@ -469,6 +469,17 @@ def avisos_cubiertos(grupos: list[dict]) -> set[int]:
     return {i for g in grupos for i in g["avisos"]}
 
 
+def filas_de_tabla(grupos: list[dict], n_avisos: int) -> list[dict]:
+    """Filas para mostrar LG (izquierda) ↔ PCZ (derecha), en el orden de los avisos.
+
+    Cada grupo guardado es una fila; cada aviso sin asociar es una fila sin novedades.
+    """
+    filas = [dict(g) for g in grupos]
+    cubiertos = avisos_cubiertos(grupos)
+    filas += [{"avisos": [i], "novedades": []} for i in range(n_avisos) if i not in cubiertos]
+    return sorted(filas, key=lambda f: (min(f["avisos"], default=-1), len(f["novedades"]) == 0))
+
+
 def fila_con_avisos(fila_lg: pd.Series, renglones: list[int]) -> pd.Series:
     """Copia de la fila de LG cuyo texto son solo los avisos elegidos (para puntuar)."""
     elegidos = [fila_lg["avisos"][i] for i in renglones if 0 <= i < len(fila_lg["avisos"])]

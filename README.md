@@ -60,21 +60,24 @@ corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: n
 1. **Carga**: subí los dos Excel y, debajo de cada uno, elegí qué columna es cada dato (si se llaman
    como siempre, ya vienen elegidas). La vista previa muestra cómo entiende la app cada fecha. Las
    filas con fecha que no se entiende se listan (no se descartan).
-2. **Asociación**: la app recorre LG fila por fila, en dos pasos:
-   - **Paso A**: tildás qué aviso(s) del párrafo vas a asociar (uno o varios). Si la fila tiene un
-     solo aviso, este paso se saltea.
-   - **Paso B**: aparecen **solo las novedades de PCZ con la misma fecha**, ordenadas por puntaje
-     calculado con el texto de **los avisos elegidos** (números compartidos como señal/cambio/km/tren
-     = 3 puntos, palabras compartidas = 1, hora cercana = hasta 3), con las coincidencias resaltadas
-     en amarillo. Tildás una o varias y tocás **Asociar**.
-   - Si quedan avisos sin asociar, volvés al paso A para elegir otros, o tocás **Terminar fila y
+2. **Asociación**: la app recorre LG fila por fila. Arriba están Anterior / Siguiente y el progreso.
+   La fila se ve como una tabla: a la izquierda los avisos del Libro de Guardia y a la derecha, en la
+   misma línea, las novedades de PCZ asociadas (o "sin novedad asociada"). Se trabaja en dos pasos:
+   - **① Elegí los avisos**: tocás una o varias tarjetas de avisos y "Elegir novedades". Si la fila
+     tiene un solo aviso, este paso se saltea.
+   - **② Elegí las novedades de PCZ**: abajo aparecen **solo las novedades con la misma fecha**,
+     ordenadas por parecido con los avisos elegidos (números compartidos como señal/cambio/km/tren
+     = 3 puntos, palabras compartidas = 1, hora cercana = hasta 3), con las coincidencias en amarillo.
+     Las que tildás aparecen a la derecha de la "nueva asociación"; después tocás **Asociar**.
+   - Si quedan avisos sin asociar, volvés al paso ① para elegir otros, o tocás **Terminar fila y
      seguir**. Cada asociación se guarda al instante; se puede quitar con 🗑️ o con Deshacer.
-   - "Ninguna corresponde" marca la fila entera como sin novedad en PCZ.
+   - Abajo: "Ninguna corresponde" (marca la fila entera sin novedad), Saltar, Deshacer, "Ir a…" (fila
+     o próxima pendiente) y la ayuda de atajos.
    - Se muestran primero las 15 novedades con mejor puntaje; con "Mostrar 15 más" o "Mostrar todas"
      aparecen las demás (el buscador busca siempre entre todas).
    - Avisos y novedades se muestran como tarjetas: un clic en cualquier parte de la tarjeta la
      tilda o destilda (las elegidas se pintan de color).
-   - Atajos: **1–9** tildar aviso (paso A) o novedad (paso B) · **Enter** pasar al paso B / asociar ·
+   - Atajos: **1–9** tildar aviso (paso ①) o novedad (paso ②) · **Enter** pasar al paso ② / asociar ·
      **← →** fila anterior/siguiente · **N** ninguna · **S** saltar (queda pendiente).
    - "Ver también día anterior / siguiente" (apagado por defecto) agrega esas novedades marcadas como
      **OTRO DÍA**, para eventos que cruzan la medianoche.
