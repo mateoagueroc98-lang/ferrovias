@@ -203,3 +203,45 @@ def test_exportar(tmp_path):
 
     res = hojas["Resumen"]
     assert "1002" in res.astype(str).to_string()
+
+
+# ------------------------------------------------ grupos aviso(s) -> novedad(es)
+def test_grupos_ida_y_vuelta():
+    grupos = [{"avisos": [0], "novedades": ["1", "2"]}, {"avisos": [1, 2], "novedades": ["3"]}]
+    novedades, avisos = a.unir_grupos(grupos)
+    assert novedades == ["1", "2", "3"]
+    assert avisos == {"1": [0], "2": [0], "3": [1, 2]}
+    s = a.sesion_nueva("h", "", "", 1)
+    a.registrar(s, 0, "asociada", novedades, avisos)
+    assert a.grupos_de_fila(s["filas"]["0"], 3) == grupos
+    assert a.avisos_cubiertos(grupos) == {0, 1, 2}
+
+
+def test_grupos_sesion_vieja_sin_avisos_es_parrafo_entero():
+    d = {"estado": "asociada", "novedades": ["9"], "avisos": {}}
+    assert a.grupos_de_fila(d, 2) == [{"avisos": [0, 1], "novedades": ["9"]}]
+    assert a.grupos_de_fila({"estado": "ninguna", "novedades": [], "avisos": {}}, 2) == []
+
+
+def test_puntaje_solo_con_avisos_elegidos():
+    fila = pd.Series({"fecha": F(2025, 3, 4), "hora": None, "avisos": ["Señal 14 Boulogne", "Cambio 7 Villa Adelina"],
+                      "texto": "Señal 14 Boulogne Cambio 7 Villa Adelina"})
+    pcz = pd.DataFrame({"id": ["1", "2"], "descripcion": ["Señal 14 Boulogne", "Cambio 7 Villa Adelina"],
+                        "fecha": [F(2025, 3, 4)] * 2})
+    c = a.candidatos(a.fila_con_avisos(fila, [1]), pcz)
+    assert list(c["id"]) == ["2", "1"] and c.iloc[1]["puntaje"] == 0
+
+
+# ---------------------------------------------- columnas elegidas por el usuario
+def test_preparar_lg_con_columnas_de_otro_nombre_y_sin_opcionales():
+    df = pd.DataFrame({"Día": ["05/03/2025"], "Texto del libro": ["Señal 14\nCambio 7"]})
+    lg = a.preparar_lg(df, {"Fecha": "Día", "Transcripción": "Texto del libro"})
+    assert lg.loc[0, "fecha"] == F(2025, 3, 5)
+    assert lg.loc[0, "avisos"] == ["Señal 14", "Cambio 7"]
+    assert lg.loc[0, "pagina"] == "" and lg.loc[0, "hora"] is None
+
+
+def test_preparar_pcz_con_columnas_de_otro_nombre():
+    df = pd.DataFrame({"Detalle": ["Falla"], "F. evento": [45721], "ID": [7.0]})
+    pcz = a.preparar_pcz(df, {"Descripción": "Detalle", "Fecha": "F. evento", "N° Novedad": "ID"})
+    assert list(pcz["id"]) == ["7"] and pcz.loc[0, "fecha"] == F(2025, 3, 5)

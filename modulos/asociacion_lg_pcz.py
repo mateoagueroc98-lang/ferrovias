@@ -45,58 +45,128 @@ if msg := ss.pop(P + "msg", None):
     getattr(st, msg[0])(msg[1])
 
 # ===================================================================== 1. Carga
+NO_TIENE = "— (no tiene) —"
+ORDEN = ["Fecha", "Transcripción", "Descripción", "N° Novedad", "Hora", "Página"]
+ARCHIVOS = [
+    # clave, título, columnas que hay que elegir, ayuda por columna
+    ("lg", "Libro de Guardia (LG)", a.COLUMNAS_LG, {
+        "Fecha": "Se usa para buscar las novedades de PCZ del mismo día.",
+        "Transcripción": "Texto del libro: cada renglón es un aviso.",
+        "Hora": "Opcional: ayuda a ordenar los candidatos por cercanía horaria.",
+        "Página": "Opcional: solo se muestra como referencia.",
+    }),
+    ("pcz", "Novedades PCZ", a.COLUMNAS_PCZ, {
+        "Fecha": "Se compara con la fecha de LG.",
+        "Descripción": "Texto de la novedad: se compara con los avisos de LG.",
+        "N° Novedad": "Número que identifica cada novedad.",
+    }),
+]
+
+
+def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict, firma: str) -> dict:
+    """Desplegables para indicar qué columna del archivo es cada dato.
+
+    Arranca con lo que reconoce por nombre; la elección queda guardada (por archivo) para
+    los otros pasos.
+    """
+    guardado = ss.get(P + "mapa_" + clave, {})
+    if guardado.get("_firma") != firma:  # archivo nuevo: sugerir por nombre
+        guardado = {"_firma": firma, **a.mapear_columnas(df, esperadas)[0]}
+    columnas = list(df.columns)
+    mapa = {"_firma": firma}
+    cols = st.columns(2)
+    # Primero los datos obligatorios, después los opcionales
+    orden = sorted(esperadas, key=lambda c: (clave == "lg" and c in a.OPCIONALES_LG,
+                                             ORDEN.index(c) if c in ORDEN else 99))
+    for k, canon in enumerate(orden):
+        opcional = canon in a.OPCIONALES_LG and clave == "lg"
+        opciones = ([NO_TIENE] if opcional else []) + columnas
+        actual = guardado.get(canon)
+        elegida = cols[k % 2].selectbox(
+            canon + (" (opcional)" if opcional else ""), opciones,
+            index=opciones.index(actual) if actual in opciones else (0 if opcional else None),
+            placeholder="Elegí la columna", help=ayudas.get(canon), key=f"{P}col_{clave}_{canon}_{firma}",
+        )
+        if elegida is not None and elegida != NO_TIENE:
+            mapa[canon] = elegida
+    ss[P + "mapa_" + clave] = mapa
+    return mapa
+
+
+def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, mostrar: bool):
+    """Sube (solo en el paso 1), lee el archivo y resuelve sus columnas.
+
+    Devuelve (tabla original, {dato: columna}) o None si falta algo.
+    """
+    if mostrar:
+        st.markdown(f"**{titulo}**")
+        subido = st.file_uploader(titulo, type=["xlsx", "xls", "csv"], key=P + "up_" + clave,
+                                  label_visibility="collapsed")
+        if subido is not None:
+            ss[P + clave] = {"nombre": subido.name, "bytes": subido.getvalue()}
+        elif P + clave in ss:
+            st.success(f"Cargado: {ss[P + clave]['nombre']}")
+    if P + clave not in ss:
+        return None
+    arch = ss[P + clave]
+    try:
+        df = leer(arch["nombre"], arch["bytes"])
+    except Exception as e:  # archivo dañado o con formato raro
+        st.error(f"No se pudo leer el archivo {arch['nombre']}: {e}")
+        return None
+    firma = a.huella(arch["bytes"])[:12]
+    if mostrar:
+        st.caption("Indicá qué columna del archivo corresponde a cada dato:")
+        mapa = elegir_columnas(clave, df, esperadas, ayudas, firma)
+    else:
+        mapa = ss.get(P + "mapa_" + clave, {})
+        if mapa.get("_firma") != firma:
+            mapa = {"_firma": firma, **a.mapear_columnas(df, esperadas)[0]}
+    mapa = {k: v for k, v in mapa.items() if k != "_firma"}
+
+    opcionales = a.OPCIONALES_LG if clave == "lg" else ()
+    if faltan := [c for c in ORDEN if c in esperadas and c not in mapa and c not in opcionales]:
+        if mostrar:
+            st.warning("Falta elegir: " + ", ".join(f"**{c}**" for c in faltan) + ".")
+        return None
+    if repetidas := sorted({c for c in mapa.values() if list(mapa.values()).count(c) > 1}):
+        st.error("Elegiste la misma columna para dos datos distintos: " + ", ".join(f"«{c}»" for c in repetidas))
+        return None
+    if mostrar:
+        st.caption("Así se ven las primeras filas con esas columnas:")
+        vista = df[list(mapa.values())].head(3).set_axis(list(mapa), axis=1)
+        vista.insert(list(mapa).index("Fecha") + 1, "Fecha (cómo la entiende la app)",
+                     vista["Fecha"].map(lambda v: a.formatear_fecha(a.parsear_fecha(v)) if a.parsear_fecha(v)
+                                        else "⚠️ no se entiende"))
+        st.dataframe(vista.astype(str), hide_index=True, use_container_width=True)
+    return df, mapa
+
+
 if paso == PASOS[0]:
     st.caption(
-        "Subí los dos Excel. Los originales **no se modifican**: la app trabaja sobre una copia y "
-        "el resultado se descarga en un Excel nuevo."
+        "Subí los dos Excel y elegí qué columna es cada dato. Los originales **no se modifican**: "
+        "la app trabaja sobre una copia y el resultado se descarga en un Excel nuevo."
     )
-    c1, c2 = st.columns(2)
-    for col, clave, titulo, columnas in [
-        (c1, "lg", "Libro de Guardia (LG)", "Página · Fecha · Hora · Transcripción"),
-        (c2, "pcz", "Novedades PCZ", "Descripción · Fecha · N° Novedad"),
-    ]:
-        with col, st.container(border=True):
-            st.markdown(f"**{titulo}**")
-            st.caption(f"Columnas necesarias: {columnas}")
-            subido = st.file_uploader(titulo, type=["xlsx", "xls", "csv"], key=P + "up_" + clave,
-                                      label_visibility="collapsed")
-            if subido is not None:
-                ss[P + clave] = {"nombre": subido.name, "bytes": subido.getvalue()}
-            elif P + clave in ss:
-                st.success(f"Cargado: {ss[P + clave]['nombre']}")
-
-if P + "lg" not in ss or P + "pcz" not in ss:
+    columnas_pantalla = st.columns(2)
+cargados = {}
+for k, (clave, titulo, esperadas, ayudas) in enumerate(ARCHIVOS):
     if paso == PASOS[0]:
-        st.info("Subí los dos archivos para empezar.")
+        with columnas_pantalla[k], st.container(border=True):
+            cargados[clave] = archivo(clave, titulo, esperadas, ayudas, mostrar=True)
     else:
-        st.info("Primero cargá los dos Excel en el paso **1. Carga**.")
+        cargados[clave] = archivo(clave, titulo, esperadas, ayudas, mostrar=False)
+
+if not all(cargados.values()):
+    if paso == PASOS[0]:
+        st.info("Subí los dos archivos y elegí sus columnas para seguir.")
+    else:
+        st.info("Primero cargá los dos Excel y elegí sus columnas en el paso **1. Carga**.")
     st.stop()
 
-# --------------------------------------------------- validación de columnas
+(lg_original, mapa_lg), (pcz_original, mapa_pcz) = cargados["lg"], cargados["pcz"]
+lg, pcz = preparar(ss[P + "lg"]["nombre"], ss[P + "lg"]["bytes"],
+                   ss[P + "pcz"]["nombre"], ss[P + "pcz"]["bytes"], mapa_lg, mapa_pcz)
 archivos = {"lg": ss[P + "lg"], "pcz": ss[P + "pcz"]}
-mapas, hay_error = {}, False
-for clave, esperadas, titulo in [("lg", a.COLUMNAS_LG, "LG"), ("pcz", a.COLUMNAS_PCZ, "PCZ")]:
-    try:
-        df = leer(archivos[clave]["nombre"], archivos[clave]["bytes"])
-    except Exception as e:  # archivo dañado o con formato raro
-        st.error(f"No se pudo leer el archivo de {titulo} ({archivos[clave]['nombre']}): {e}")
-        hay_error = True
-        continue
-    mapas[clave], faltan = a.mapear_columnas(df, esperadas)
-    if faltan:
-        hay_error = True
-        st.error(
-            f"Al archivo de **{titulo}** ({archivos[clave]['nombre']}) le falta: "
-            + ", ".join(f"**{f}**" for f in faltan)
-            + ".  \nColumnas que tiene: " + ", ".join(f"`{c}`" for c in df.columns)
-        )
-if hay_error:
-    st.stop()
-
-lg_original = leer(archivos["lg"]["nombre"], archivos["lg"]["bytes"])
-pcz_original = leer(archivos["pcz"]["nombre"], archivos["pcz"]["bytes"])
-lg, pcz = preparar(archivos["lg"]["nombre"], archivos["lg"]["bytes"],
-                   archivos["pcz"]["nombre"], archivos["pcz"]["bytes"], mapas["lg"], mapas["pcz"])
 if lg.empty:
     st.error("El archivo de LG no tiene filas.")
     st.stop()
@@ -135,38 +205,6 @@ if paso == PASOS[0]:
     if rep := a.ids_repetidos(pcz):
         st.warning("Hay N° de Novedad repetidos en PCZ (se tratan como una sola novedad): " + ", ".join(rep[:20]))
 
-    st.header("Sesión")
-    p = a.progreso(sesion)
-    st.caption(
-        "El progreso se guarda solo en cada paso (carpeta `datos/sesiones`). Si cerrás la app y "
-        "volvés a subir los mismos dos archivos, retomás donde quedaste."
-    )
-    st.markdown(f"Resueltas **{p['total'] - p['pendientes']}** de **{p['total']}** filas.")
-    c1, c2, c3 = st.columns(3)
-    c1.download_button("💾 Exportar sesión (.json)", a.sesion_a_json(sesion),
-                       f"sesion_lg_pcz_{huella}.json", mime="application/json")
-    importada = c2.file_uploader("📂 Importar sesión (.json)", type=["json"], key=P + "up_sesion")
-    if importada is not None and ss.get(P + "importada") != importada.file_id:
-        try:
-            nueva, avisos_ = a.importar_sesion(importada.getvalue().decode("utf-8"), len(lg), huella)
-        except (ValueError, UnicodeDecodeError) as e:
-            st.error(str(e))
-        else:
-            ss[P + "importada"] = importada.file_id
-            ss[P + "sesion"] = nueva
-            ss[P + "ver"] += 1
-            guardar()
-            ss[P + "msg"] = ("warning" if avisos_ else "success",
-                             " ".join(avisos_) or "Sesión importada.")
-            st.rerun()
-    with c3:
-        seguro = st.checkbox("Quiero borrar todo lo asociado")
-        if st.button("🗑️ Empezar de cero", disabled=not seguro):
-            ss[P + "sesion"] = a.sesion_nueva(huella, archivos["lg"]["nombre"], archivos["pcz"]["nombre"], len(lg))
-            ss[P + "ver"] += 1
-            guardar()
-            st.rerun()
-
     st.button("Ir a asociar ➡️", type="primary", on_click=ir_a_paso, args=(PASOS[1],))
     st.stop()
 
@@ -198,22 +236,37 @@ if paso == PASOS[2]:
     st.stop()
 
 # ================================================================ 2. Asociación
+# Cada fila de LG se trabaja en dos pasos:
+#   A) elegir qué aviso(s) del párrafo se van a asociar,
+#   B) elegir la(s) novedad(es) de PCZ para esos avisos.
+# Cada asociación (avisos -> novedades) se guarda al instante; si quedan avisos sin
+# asociar se vuelve al paso A.
 n = len(lg)
 asociadas_a = a.asociaciones_por_novedad(sesion)
-desc_por_id = dict(zip(pcz["id"], pcz["descripcion"]))
+
+
+def _escapar(texto: str) -> str:
+    """Evita que el texto del aviso se interprete como markdown en las etiquetas."""
+    return re.sub(r"([\\`*_{}\[\]()#+\-.!|~$<>])", r"\\\1", str(texto))
 
 
 def borrador() -> dict:
-    """Elección en curso de la fila actual (se descarta al cambiar de fila sin confirmar)."""
+    """Elección en curso de la fila actual (paso, avisos y novedades tildados)."""
     pos, ver = sesion["posicion"], ss[P + "ver"]
     b = ss.get(P + "borrador")
     if not b or b["fila"] != pos or b["ver"] != ver:
-        guardada = sesion["filas"][str(pos)]
-        b = {"fila": pos, "ver": ver,
-             "novedades": list(guardada["novedades"]) if guardada["estado"] == "asociada" else [],
-             "avisos": {k: list(v) for k, v in guardada.get("avisos", {}).items()}}
+        n_avisos = len(lg.loc[pos, "avisos"])
+        if n_avisos <= 1:  # un solo aviso: directo a elegir novedades
+            b = {"fila": pos, "ver": ver, "etapa": "pcz", "avisos": list(range(n_avisos)), "novedades": []}
+        else:
+            b = {"fila": pos, "ver": ver, "etapa": "avisos", "avisos": [], "novedades": []}
         ss[P + "borrador"] = b
     return b
+
+
+def grupos_actuales() -> list[dict]:
+    pos = sesion["posicion"]
+    return a.grupos_de_fila(sesion["filas"][str(pos)], len(lg.loc[pos, "avisos"]))
 
 
 def mover(destino: int):
@@ -222,27 +275,77 @@ def mover(destino: int):
     guardar()
 
 
-def tildar(nov: str, clave: str):
+def tildar(lista: str, valor, clave: str):
+    elegidos = borrador()[lista]
+    if ss[clave] and valor not in elegidos:
+        elegidos.append(valor)
+    elif not ss[clave] and valor in elegidos:
+        elegidos.remove(valor)
+
+
+def todos_los_avisos():
     b = borrador()
-    if ss[clave] and nov not in b["novedades"]:
-        b["novedades"].append(nov)
-    elif not ss[clave] and nov in b["novedades"]:
-        b["novedades"].remove(nov)
+    b["avisos"] = list(range(len(lg.loc[sesion["posicion"], "avisos"])))
+    ss[P + "ver"] += 1
+    ss[P + "borrador"] = {**b, "ver": ss[P + "ver"]}
 
 
-def elegir_avisos(nov: str, clave: str):
-    borrador()["avisos"][nov] = [int(x.split(".")[0]) - 1 for x in ss[clave]]
+def ir_a_novedades():
+    b = borrador()
+    if not b["avisos"]:
+        ss[P + "msg"] = ("error", "Tildá al menos un aviso.")
+        return
+    b["etapa"] = "pcz"
+
+
+def volver_a_avisos():
+    borrador()["etapa"] = "avisos"
+
+
+def siguiente_fila():
+    pos = sesion["posicion"]
+    if pos == n - 1:
+        ss[P + "msg"] = ("success", "Llegaste a la última fila. Revisá las pendientes o pasá a "
+                                    "**3. Exportar**.")
+    mover(pos + 1)
+
+
+def asociar():
+    """Guarda el grupo avisos -> novedades elegido y sigue."""
+    pos, b = sesion["posicion"], borrador()
+    if not b["novedades"]:
+        ss[P + "msg"] = ("error", "No elegiste ninguna novedad. Tildá al menos una o usá "
+                                  "«Ninguna corresponde».")
+        return
+    grupos = grupos_actuales() + [{"avisos": sorted(b["avisos"]), "novedades": list(b["novedades"])}]
+    a.registrar(sesion, pos, "asociada", *a.unir_grupos(grupos))
+    n_avisos = len(lg.loc[pos, "avisos"])
+    faltan = n_avisos - len(a.avisos_cubiertos(grupos) & set(range(n_avisos)))
+    if faltan > 0:
+        # Quedan avisos: se vuelve al paso A en la misma fila
+        ss[P + "msg"] = ("success", f"Asociado. Quedan {faltan} aviso(s) sin asociar: elegí otros o "
+                                    "tocá «Terminar fila y seguir».")
+        ss[P + "ver"] += 1
+        guardar()
+    else:
+        siguiente_fila()
+
+
+def quitar_grupo(i: int):
+    pos = sesion["posicion"]
+    grupos = grupos_actuales()
+    del grupos[i]
+    if grupos:
+        a.registrar(sesion, pos, "asociada", *a.unir_grupos(grupos))
+    else:
+        a.registrar(sesion, pos, "pendiente")
+    ss[P + "ver"] += 1
+    guardar()
 
 
 def accion(tipo: str):
-    pos, b = sesion["posicion"], borrador()
-    if tipo == "confirmar":
-        if not b["novedades"]:
-            ss[P + "msg"] = ("error", "No elegiste ninguna novedad. Tildá al menos una o usá "
-                                      "«Ninguna corresponde».")
-            return
-        a.registrar(sesion, pos, "asociada", b["novedades"], b["avisos"])
-    elif tipo == "ninguna":
+    pos = sesion["posicion"]
+    if tipo == "ninguna":
         a.registrar(sesion, pos, "ninguna")
     elif tipo == "saltar":
         a.registrar(sesion, pos, "pendiente")
@@ -253,10 +356,7 @@ def accion(tipo: str):
         ss[P + "ver"] += 1
         guardar()
         return
-    if pos == n - 1:
-        ss[P + "msg"] = ("success", "Llegaste a la última fila. Revisá las pendientes o pasá a "
-                                    "**3. Exportar**.")
-    mover(pos + 1)
+    siguiente_fila()
 
 
 def ir_a_fila():
@@ -271,11 +371,19 @@ def proxima_pendiente():
         mover(sig)
 
 
+st.html("""<style>
+[class*="st-key-tarjeta_"] { cursor: pointer; }
+[class*="st-key-tarjeta_"]:has(input:checked) { background: rgba(255, 75, 75, 0.10); }
+</style>""")
+
 pos = sesion["posicion"]
 fila = lg.loc[pos]
 guardada = sesion["filas"][str(pos)]
 b = borrador()
 ver = ss[P + "ver"]
+grupos = grupos_actuales()
+cubiertos = a.avisos_cubiertos(grupos)
+n_avisos = len(fila["avisos"])
 
 # ------------------------------------------------------------------ progreso
 p = a.progreso(sesion)
@@ -298,135 +406,190 @@ with st.container(border=True):
         f"#### LG fila {pos + 1} &nbsp;·&nbsp; Página {fila['pagina'] or '—'} &nbsp;·&nbsp; "
         f"{a.formatear_fecha(fila['fecha'])} &nbsp;·&nbsp; {hora or 'sin hora'}"
     )
-    estado_txt = ESTADO_ICONO[guardada["estado"]]
-    if guardada["estado"] == "asociada":
-        estado_txt += ": " + ", ".join(guardada["novedades"])
-    st.caption(f"Estado guardado: {estado_txt}")
+    st.caption(f"Estado guardado: {ESTADO_ICONO[guardada['estado']]}")
     if fila["fecha"] is None:
         st.error(
             f"La fecha de esta fila no se pudo interpretar (viene como «{fila['fecha_original']}»). "
             "No se pueden proponer candidatos por fecha: usá el buscador para buscar en todas las novedades."
         )
-    if fila["avisos"]:
+    if not n_avisos:
+        st.warning("Esta fila no tiene transcripción.")
+
+    if b["etapa"] == "avisos":
+        # ---------------------------------------------- Paso A: elegir avisos
+        st.markdown("**Paso A · ¿Qué aviso(s) vas a asociar?** Tocá una o varias tarjetas.")
+        for i, aviso in enumerate(fila["avisos"]):
+            novs = [nv for g in grupos if i in g["avisos"] for nv in g["novedades"]]
+            with st.container(border=True, key=f"tarjeta_a_{ver}_{pos}_{i}"):
+                c1, c2 = st.columns([1, 5])
+                clave = f"{P}aviso_{ver}_{pos}_{i}"
+                c1.checkbox(f"\\[{i + 1}\\] Aviso {i + 1}", value=i in b["avisos"], key=clave,
+                            on_change=tildar, args=("avisos", i, clave))
+                marca = ("<span style='background:#16a34a;color:#fff;padding:1px 6px;border-radius:4px'>"
+                         f"✔ asociado a N° {', '.join(novs)}</span><br>") if novs else ""
+                c2.markdown(marca + f"<span style='font-size:1.05rem'>{a.resaltar(aviso, set())}</span>",
+                            unsafe_allow_html=True)
+        st.button("☑ Tildar todos", on_click=todos_los_avisos)
+    else:
+        # ------------------------------------- Paso B: avisos ya elegidos
+        st.markdown("**Paso B · Elegí la(s) novedad(es) de PCZ para:**")
         st.markdown(
             "<ol style='font-size:1.05rem;line-height:1.6'>"
-            + "".join(f"<li>{a.resaltar(x, set())}</li>" for x in fila["avisos"])
+            + "".join(
+                f"<li value='{i + 1}'><b>{a.resaltar(x, set())}</b></li>" if i in b["avisos"]
+                else f"<li value='{i + 1}' style='opacity:0.4'>{a.resaltar(x, set())}</li>"
+                for i, x in enumerate(fila["avisos"]))
             + "</ol>",
             unsafe_allow_html=True,
         )
-    else:
-        st.warning("Esta fila no tiene transcripción.")
 
-# ----------------------------------------------------- elección y botones
+    if grupos:
+        st.markdown("**Asociaciones guardadas en esta fila:**")
+        for i, g in enumerate(grupos):
+            c1, c2 = st.columns([6, 1])
+            c1.markdown("Aviso(s) " + ", ".join(str(x + 1) for x in g["avisos"]) + " → "
+                        + ", ".join(f"N° {nv}" for nv in g["novedades"]))
+            c2.button("🗑️ Quitar", key=f"{P}quitar_{ver}_{pos}_{i}", on_click=quitar_grupo, args=(i,))
+        if n_avisos and len(cubiertos) < n_avisos:
+            st.caption(f"Quedan {n_avisos - len(cubiertos)} aviso(s) sin asociar.")
+
+# ----------------------------------------------------------------- botones
 with st.container(border=True):
-    if b["novedades"]:
-        st.markdown("**Tu elección:** " + ", ".join(f"N° {x}" for x in b["novedades"]))
-        for nov in b["novedades"]:
-            otras = [f + 1 for f in asociadas_a.get(nov, []) if f != pos]
-            if otras:
-                st.warning(f"La novedad {nov} ya está asociada a LG fila {', '.join(map(str, otras))}.")
-        if len(fila["avisos"]) > 1:
-            st.caption("Opcional: indicá a qué aviso corresponde cada novedad (si no, se usa el párrafo entero).")
-            opciones = [f"{i + 1}. {x[:70]}" for i, x in enumerate(fila["avisos"])]
-            cols = st.columns(min(len(b["novedades"]), 3))
-            for k, nov in enumerate(b["novedades"]):
-                clave = f"{P}av_{ver}_{pos}_{nov}"
-                cols[k % len(cols)].multiselect(
-                    f"Aviso(s) de N° {nov}", opciones,
-                    default=[opciones[i] for i in b["avisos"].get(nov, []) if i < len(opciones)],
-                    key=clave, on_change=elegir_avisos, args=(nov, clave), placeholder="Párrafo entero",
-                )
+    if b["etapa"] == "avisos":
+        c = st.columns([1.6, 1.6, 1.4, 1, 1])
+        c[0].button("➡️ Elegir novedades", type="primary", on_click=ir_a_novedades,
+                    disabled=not b["avisos"], use_container_width=True)
+        c[1].button("✅ Terminar fila y seguir", on_click=siguiente_fila, disabled=not grupos,
+                    use_container_width=True, help="Deja guardado lo asociado y pasa a la siguiente fila.")
+        atajos = ("**1–9** tildar aviso · **Enter** elegir novedades (o terminar la fila si ya asociaste) · ")
     else:
-        st.markdown("**Tu elección:** ninguna novedad tildada todavía.")
-
-    c = st.columns([1, 1.6, 1.6, 1, 1, 1])
-    c[0].button("⬅️ Anterior", on_click=mover, args=(pos - 1,), disabled=pos == 0, use_container_width=True)
-    c[1].button("✅ Confirmar y siguiente", type="primary", on_click=accion, args=("confirmar",),
-                use_container_width=True)
-    c[2].button("🚫 Ninguna corresponde", on_click=accion, args=("ninguna",), use_container_width=True)
+        if b["novedades"]:
+            st.markdown("**Novedades elegidas:** " + ", ".join(f"N° {x}" for x in b["novedades"]))
+            for nov in b["novedades"]:
+                otras = [f + 1 for f in asociadas_a.get(nov, []) if f != pos]
+                if otras:
+                    st.warning(f"La novedad {nov} ya está asociada a LG fila {', '.join(map(str, otras))}.")
+        else:
+            st.markdown("**Novedades elegidas:** ninguna todavía. Tildalas en la lista de abajo.")
+        c = st.columns([1.6, 1.6, 1.4, 1, 1])
+        c[0].button("✅ Asociar", type="primary", on_click=asociar, use_container_width=True)
+        c[1].button("⬅️ Volver a elegir avisos", on_click=volver_a_avisos, disabled=n_avisos <= 1,
+                    use_container_width=True)
+        atajos = "**1–9** tildar novedad · **Enter** asociar · "
+    c[2].button("🚫 Ninguna corresponde", on_click=accion, args=("ninguna",), use_container_width=True,
+                help="Marca toda la fila como sin novedad en PCZ.")
     c[3].button("⏭️ Saltar", on_click=accion, args=("saltar",), use_container_width=True,
-                help="Deja la fila pendiente y pasa a la siguiente.")
+                help="Deja la fila pendiente (borra lo asociado en ella) y pasa a la siguiente.")
     c[4].button("↩️ Deshacer", on_click=accion, args=("deshacer",), use_container_width=True,
                 disabled=not sesion["historial"])
-    c[5].button("➡️ Siguiente", on_click=mover, args=(pos + 1,), disabled=pos == n - 1,
-                use_container_width=True)
-    st.caption("Atajos: **1–9** tildar candidato · **Enter** confirmar y siguiente · **← →** anterior/siguiente "
-               "· **N** ninguna corresponde · **S** saltar. (No funcionan mientras escribís en el buscador.)")
+    n1, _, n2 = st.columns([1, 4, 1])
+    n1.button("⬅️ Anterior", on_click=mover, args=(pos - 1,), disabled=pos == 0, use_container_width=True)
+    n2.button("➡️ Siguiente", on_click=mover, args=(pos + 1,), disabled=pos == n - 1, use_container_width=True)
+    st.caption("Atajos: " + atajos + "**← →** fila anterior/siguiente · **N** ninguna corresponde · "
+               "**S** saltar. (No funcionan mientras escribís en el buscador.)")
 
 # -------------------------------------------------------------- candidatos
-st.subheader("Novedades de PCZ candidatas")
-f1, f2 = st.columns([3, 2])
-busqueda = f1.text_input("🔎 Buscar en las novedades", key=f"{P}buscar_{pos}",
-                         placeholder="Ej.: Boulogne 14  (filtra por N° o descripción)")
-vecinos = f2.toggle("Ver también día anterior / siguiente", key=P + "vecinos",
-                    help="Para eventos que cruzan la medianoche. Se muestran marcados como OTRO DÍA.")
+if b["etapa"] == "pcz":
+    st.subheader("Novedades de PCZ candidatas")
+    f1, f2 = st.columns([3, 2])
+    busqueda = f1.text_input("🔎 Buscar en las novedades", key=f"{P}buscar_{pos}",
+                             placeholder="Ej.: Boulogne 14  (filtra por N° o descripción)")
+    vecinos = f2.toggle("Ver también día anterior / siguiente", key=P + "vecinos",
+                        help="Para eventos que cruzan la medianoche. Se muestran marcados como OTRO DÍA.")
 
-if fila["fecha"] is None:
-    # Sin fecha en LG: se busca en todas las novedades, solo si el usuario escribe algo
-    cands = a.todas_las_novedades(fila, pcz[pcz["fecha"].notna()])
-else:
-    cands = a.candidatos(fila, pcz, vecinos)
-del_dia = int((~cands["otro_dia"]).sum())
-cands = a.buscar(cands, busqueda)
-sin_fecha = a.buscar(a.pcz_sin_fecha(fila, pcz), busqueda)
-
-if fila["fecha"] is not None:
-    st.caption(f"{del_dia} novedad(es) del {a.formatear_fecha(fila['fecha'])}"
-               + (f" · {len(cands)} coinciden con la búsqueda" if busqueda else "")
-               + ". Puntaje: número compartido 3 (1 si es de una cifra) · palabra compartida 1 · "
-                 "hora cercana hasta 3. Se resaltan las coincidencias.")
-
-
-def mostrar(c: pd.DataFrame, inicio: int, etiqueta: str | None):
-    for k, (_, cand) in enumerate(c.iterrows(), start=inicio):
-        nov = cand["id"]
-        elegida = nov in b["novedades"]
-        otras = [f + 1 for f in asociadas_a.get(nov, []) if f != pos]
-        with st.container(border=True):
-            c1, c2 = st.columns([1, 5])
-            clave = f"{P}sel_{ver}_{pos}_{cand['fila_pcz']}"
-            c1.checkbox(f"\\[{k}\\] N° {nov}", value=elegida, key=clave, on_change=tildar, args=(nov, clave))
-            c1.caption(f"Puntaje **{cand['puntaje']}**")
-            marcas = []
-            if etiqueta:
-                marcas.append(f"<span style='background:#f59e0b;color:#000;padding:1px 6px;border-radius:4px;"
-                              f"font-weight:600'>{etiqueta} · {a.formatear_fecha(cand['fecha'])}</span>")
-            if otras:
-                marcas.append(f"<span style='background:#3b82f6;color:#fff;padding:1px 6px;border-radius:4px'>"
-                              f"🔗 ya asociada a LG fila {', '.join(map(str, otras))}</span>")
-            if pos in asociadas_a.get(nov, []):
-                marcas.append("<span style='background:#16a34a;color:#fff;padding:1px 6px;border-radius:4px'>"
-                              "guardada en esta fila</span>")
-            c2.markdown(
-                (" ".join(marcas) + "<br>" if marcas else "")
-                + a.resaltar(cand["descripcion"], cand["comunes"], cand["hora_suma"])
-                + f"<br><span style='opacity:0.6;font-size:0.85rem'>{cand['detalle']}</span>",
-                unsafe_allow_html=True,
-            )
-            if elegida and otras:
-                c2.warning(f"Ya asociada a LG fila {', '.join(map(str, otras))}.")
-
-
-mismo = cands[~cands["otro_dia"]]
-otro = cands[cands["otro_dia"]]
-if fila["fecha"] is None:
-    if not busqueda:
-        st.info("Escribí en el buscador para buscar entre todas las novedades de PCZ.")
+    # El puntaje se calcula solo con el texto de los avisos elegidos
+    fila_sel = a.fila_con_avisos(fila, b["avisos"])
+    if fila["fecha"] is None:
+        # Sin fecha en LG: se busca en todas las novedades, solo si el usuario escribe algo
+        cands = a.todas_las_novedades(fila_sel, pcz[pcz["fecha"].notna()])
     else:
-        mostrar(cands, 1, "SIN FECHA EN LG")
-else:
-    if mismo.empty:
-        st.info("No hay novedades de PCZ " + ("que coincidan con la búsqueda " if busqueda else "")
-                + f"con fecha {a.formatear_fecha(fila['fecha'])}.")
-    mostrar(mismo, 1, None)
-    if vecinos:
-        st.markdown("##### 🌙 OTRO DÍA (día anterior / siguiente)")
-        if otro.empty:
-            st.caption("No hay novedades del día anterior ni del siguiente.")
-        mostrar(otro, len(mismo) + 1, "OTRO DÍA")
-if len(sin_fecha):
-    with st.expander(f"Novedades de PCZ sin fecha reconocible ({len(sin_fecha)})"):
-        mostrar(sin_fecha, len(cands) + 1, "SIN FECHA")
+        cands = a.candidatos(fila_sel, pcz, vecinos)
+    del_dia = int((~cands["otro_dia"]).sum())
+    cands = a.buscar(cands, busqueda)
+    sin_fecha = a.buscar(a.pcz_sin_fecha(fila_sel, pcz), busqueda)
+
+    if fila["fecha"] is not None:
+        st.caption(f"{del_dia} novedad(es) del {a.formatear_fecha(fila['fecha'])}"
+                   + (f" · {len(cands)} coinciden con la búsqueda" if busqueda else "")
+                   + ". Puntaje (con los avisos elegidos): número compartido 3 (1 si es de una cifra) · "
+                     "palabra compartida 1 · hora cercana hasta 3. Se resaltan las coincidencias.")
+
+    en_esta_fila = {nv: g["avisos"] for g in grupos for nv in g["novedades"]}
+
+    # Se dibujan de a tandas (las de mayor puntaje primero): dibujar cientos de tarjetas en
+    # cada clic hace lenta la pantalla. El buscador sigue buscando entre todas.
+    POR_TANDA = 15
+    clave_limite = f"{P}limite_{pos}"
+    limite = ss.get(clave_limite, POR_TANDA)
+
+    def ampliar(cantidad: int):
+        ss[clave_limite] = cantidad
+
+    def mostrar(c: pd.DataFrame, inicio: int, etiqueta: str | None, seccion: str) -> int:
+        """Dibuja las tarjetas de `c` (hasta el límite, más las ya tildadas). Devuelve cuántas dibujó."""
+        visibles = c.head(limite)
+        tildadas = c[c["id"].isin(b["novedades"]) & ~c.index.isin(visibles.index)]
+        visibles = pd.concat([visibles, tildadas])
+        for k, (_, cand) in enumerate(visibles.iterrows(), start=inicio):
+            nov = cand["id"]
+            elegida = nov in b["novedades"]
+            otras = [f + 1 for f in asociadas_a.get(nov, []) if f != pos]
+            with st.container(border=True, key=f"tarjeta_n_{ver}_{pos}_{cand['fila_pcz']}"):
+                c1, c2 = st.columns([1, 5])
+                clave = f"{P}sel_{ver}_{pos}_{cand['fila_pcz']}"
+                c1.checkbox(f"\\[{k}\\] N° {nov}", value=elegida, key=clave, on_change=tildar,
+                            args=("novedades", nov, clave))
+                c1.caption(f"Puntaje **{cand['puntaje']}**")
+                marcas = []
+                if etiqueta:
+                    marcas.append(f"<span style='background:#f59e0b;color:#000;padding:1px 6px;border-radius:4px;"
+                                  f"font-weight:600'>{etiqueta} · {a.formatear_fecha(cand['fecha'])}</span>")
+                if otras:
+                    marcas.append(f"<span style='background:#3b82f6;color:#fff;padding:1px 6px;border-radius:4px'>"
+                                  f"🔗 ya asociada a LG fila {', '.join(map(str, otras))}</span>")
+                if nov in en_esta_fila:
+                    marcas.append("<span style='background:#16a34a;color:#fff;padding:1px 6px;border-radius:4px'>"
+                                  "ya asociada en esta fila (aviso "
+                                  + ", ".join(str(x + 1) for x in en_esta_fila[nov]) + ")</span>")
+                c2.markdown(
+                    (" ".join(marcas) + "<br>" if marcas else "")
+                    + a.resaltar(cand["descripcion"], cand["comunes"], cand["hora_suma"])
+                    + f"<br><span style='opacity:0.6;font-size:0.85rem'>{cand['detalle']}</span>",
+                    unsafe_allow_html=True,
+                )
+                if elegida and otras:
+                    c2.warning(f"Ya asociada a LG fila {', '.join(map(str, otras))}.")
+        if len(c) > len(visibles):
+            resto = len(c) - len(visibles)
+            st.caption(f"Se muestran {len(visibles)} de {len(c)}. Quedan {resto} con menor puntaje.")
+            k1, k2, _ = st.columns([1, 1, 3])
+            k1.button(f"⬇️ Mostrar {min(POR_TANDA, resto)} más", key=f"{P}mas_{seccion}_{ver}_{pos}",
+                      on_click=ampliar, args=(limite + POR_TANDA,), use_container_width=True)
+            k2.button(f"Mostrar todas ({len(c)})", key=f"{P}todas_{seccion}_{ver}_{pos}",
+                      on_click=ampliar, args=(len(c),), use_container_width=True)
+        return len(visibles)
+
+    mismo = cands[~cands["otro_dia"]]
+    otro = cands[cands["otro_dia"]]
+    if fila["fecha"] is None:
+        if not busqueda:
+            st.info("Escribí en el buscador para buscar entre todas las novedades de PCZ.")
+            dibujadas = 0
+        else:
+            dibujadas = mostrar(cands, 1, "SIN FECHA EN LG", "todas")
+    else:
+        if mismo.empty:
+            st.info("No hay novedades de PCZ " + ("que coincidan con la búsqueda " if busqueda else "")
+                    + f"con fecha {a.formatear_fecha(fila['fecha'])}.")
+        dibujadas = mostrar(mismo, 1, None, "mismo")
+        if vecinos:
+            st.markdown("##### 🌙 OTRO DÍA (día anterior / siguiente)")
+            if otro.empty:
+                st.caption("No hay novedades del día anterior ni del siguiente.")
+            dibujadas += mostrar(otro, dibujadas + 1, "OTRO DÍA", "otro")
+    if len(sin_fecha):
+        with st.expander(f"Novedades de PCZ sin fecha reconocible ({len(sin_fecha)})"):
+            mostrar(sin_fecha, dibujadas + 1, "SIN FECHA", "sin_fecha")
 
 with st.expander("Lista de todas las filas de LG"):
     st.dataframe(pd.DataFrame({
@@ -450,7 +613,7 @@ window.parent.__lgpczTeclas = function (e) {
   if (escribe || e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
   const boton = (txt) => Array.from(doc.querySelectorAll('button'))
     .find(b => b.innerText.trim().endsWith(txt) && !b.disabled);
-  if (!Array.from(doc.querySelectorAll('button')).some(b => b.innerText.trim().endsWith('Confirmar y siguiente'))) return;
+  if (!Array.from(doc.querySelectorAll('button')).some(b => b.innerText.trim().endsWith('Ninguna corresponde'))) return;
   if (/^[1-9]$/.test(e.key)) {
     const marca = '[' + e.key + ']';
     const label = Array.from(doc.querySelectorAll('[data-testid="stCheckbox"] label'))
@@ -459,14 +622,29 @@ window.parent.__lgpczTeclas = function (e) {
     if (casilla) { e.preventDefault(); casilla.click(); }
     return;
   }
-  const mapa = {'Enter': 'Confirmar y siguiente', 'ArrowLeft': 'Anterior', 'ArrowRight': 'Siguiente',
-                'n': 'Ninguna corresponde', 'N': 'Ninguna corresponde', 's': 'Saltar', 'S': 'Saltar'};
-  if (mapa[e.key]) {
-    e.preventDefault();
-    const b = boton(mapa[e.key]);
-    if (b) b.click();
+  let b = null;
+  if (e.key === 'Enter') {
+    b = boton('Asociar') || boton('Elegir novedades') || boton('Terminar fila y seguir');
+  } else {
+    const mapa = {'ArrowLeft': 'Anterior', 'ArrowRight': 'Siguiente', 'n': 'Ninguna corresponde',
+                  'N': 'Ninguna corresponde', 's': 'Saltar', 'S': 'Saltar'};
+    if (!mapa[e.key]) return;
+    b = boton(mapa[e.key]);
   }
+  e.preventDefault();
+  if (b) b.click();
 };
 doc.addEventListener('keydown', window.parent.__lgpczTeclas);
+
+// Tarjetas (avisos y novedades): un clic en cualquier parte de la tarjeta la tilda o destilda.
+if (window.parent.__lgpczClic) doc.removeEventListener('click', window.parent.__lgpczClic);
+window.parent.__lgpczClic = function (e) {
+  // La casilla y su texto ya funcionan solos; botones, links y campos tampoco se tocan
+  if (e.target.closest('input, label, button, a, textarea, [data-baseweb="select"]')) return;
+  const tarjeta = e.target.closest('[class*="st-key-tarjeta_"]');
+  const casilla = tarjeta && tarjeta.querySelector('[data-testid="stCheckbox"] input');
+  if (casilla) casilla.click();
+};
+doc.addEventListener('click', window.parent.__lgpczClic);
 </script>
 """, height=0)

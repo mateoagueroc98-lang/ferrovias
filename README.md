@@ -51,22 +51,31 @@ Se abre el navegador. Subí los archivos, armá las coincidencias, elegí las co
 Sirve para asociar cada fila del **Libro de Guardia (LG)** con la(s) novedad(es) del **PCZ** que le
 corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: no usa IA ni internet.
 
-**Archivos que necesita** (los nombres de columna toleran mayúsculas, tildes y espacios; ej. "N° Novedad",
-"Nº Novedad", "N Novedad", "Descripcion"):
-- **LG**: `Página | Fecha | Hora | Transcripción` — cada fila es un párrafo; cada renglón de la
-  transcripción es un aviso.
-- **PCZ**: `Descripción | Fecha | N° Novedad` — el N° de Novedad identifica cada fila.
+**Archivos que necesita** (las columnas pueden llamarse como sea: al cargar elegís cuál es cada dato):
+- **LG**: Fecha y Transcripción (obligatorias), Hora y Página (opcionales) — cada fila es un párrafo;
+  cada renglón de la transcripción es un aviso.
+- **PCZ**: Fecha, Descripción y N° Novedad — el N° de Novedad identifica cada fila.
 
 **Pasos**
-1. **Carga**: subí los dos Excel. Si falta una columna, la app dice cuál. Las filas con fecha que no
-   se entiende se listan (no se descartan).
-2. **Asociación**: la app recorre LG fila por fila. Abajo aparecen **solo las novedades de PCZ con la
-   misma fecha**, ordenadas por puntaje (números compartidos como señal/cambio/km/tren = 3 puntos,
-   palabras compartidas = 1, hora cercana = hasta 3), con las coincidencias resaltadas en amarillo.
-   Tildá una o varias y confirmá, o marcá "Ninguna corresponde". Si un párrafo tiene varios avisos,
-   podés indicar a qué aviso corresponde cada novedad (si no, se usa el párrafo entero).
-   - Atajos: **1–9** tildar candidato · **Enter** confirmar y siguiente · **← →** anterior/siguiente ·
-     **N** ninguna · **S** saltar (queda pendiente).
+1. **Carga**: subí los dos Excel y, debajo de cada uno, elegí qué columna es cada dato (si se llaman
+   como siempre, ya vienen elegidas). La vista previa muestra cómo entiende la app cada fecha. Las
+   filas con fecha que no se entiende se listan (no se descartan).
+2. **Asociación**: la app recorre LG fila por fila, en dos pasos:
+   - **Paso A**: tildás qué aviso(s) del párrafo vas a asociar (uno o varios). Si la fila tiene un
+     solo aviso, este paso se saltea.
+   - **Paso B**: aparecen **solo las novedades de PCZ con la misma fecha**, ordenadas por puntaje
+     calculado con el texto de **los avisos elegidos** (números compartidos como señal/cambio/km/tren
+     = 3 puntos, palabras compartidas = 1, hora cercana = hasta 3), con las coincidencias resaltadas
+     en amarillo. Tildás una o varias y tocás **Asociar**.
+   - Si quedan avisos sin asociar, volvés al paso A para elegir otros, o tocás **Terminar fila y
+     seguir**. Cada asociación se guarda al instante; se puede quitar con 🗑️ o con Deshacer.
+   - "Ninguna corresponde" marca la fila entera como sin novedad en PCZ.
+   - Se muestran primero las 15 novedades con mejor puntaje; con "Mostrar 15 más" o "Mostrar todas"
+     aparecen las demás (el buscador busca siempre entre todas).
+   - Avisos y novedades se muestran como tarjetas: un clic en cualquier parte de la tarjeta la
+     tilda o destilda (las elegidas se pintan de color).
+   - Atajos: **1–9** tildar aviso (paso A) o novedad (paso B) · **Enter** pasar al paso B / asociar ·
+     **← →** fila anterior/siguiente · **N** ninguna · **S** saltar (queda pendiente).
    - "Ver también día anterior / siguiente" (apagado por defecto) agrega esas novedades marcadas como
      **OTRO DÍA**, para eventos que cruzan la medianoche.
    - Las novedades ya asociadas a otra fila se marcan en azul; se pueden elegir igual (con aviso).
@@ -75,8 +84,8 @@ corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: n
    eventos RAMS) y `Resumen`.
 
 **Guardado**: el progreso se guarda solo en `datos/sesiones/` (no se sube a GitHub). Si cerrás la app y
-volvés a subir **los mismos dos archivos**, sigue donde quedaste. En el paso 1 podés exportar la
-sesión (.json) para llevarla a la otra compu e importarla allá. Los Excel originales nunca se modifican.
+volvés a subir **los mismos dos archivos**, sigue donde quedaste. El progreso no pasa de una compu a
+otra. Los Excel originales nunca se modifican.
 
 **Probarlo con datos inventados**: subí `tests/ejemplos/LG_ejemplo.xlsx` y `tests/ejemplos/PCZ_ejemplo.xlsx`
 (se regeneran con `python tests/generar_ejemplos.py`). Tests: `python -m pytest`.
@@ -87,11 +96,15 @@ sesión (.json) para llevarla a la otra compu e importarla allá. Los Excel orig
 - Se lee solo la **primera hoja** de cada Excel.
 - El puntaje es una ayuda simple (coincidencia de números y palabras, sin sinónimos ni abreviaturas:
   "PAN" y "P.A.N." no coinciden). Siempre se muestran todas las novedades del día.
-- Si cambiás algo en un Excel (aunque sea una celda), la app lo toma como archivos nuevos y empieza una
-  sesión nueva: usá "Importar sesión" con el .json exportado para recuperar lo hecho.
-- Si cambiás de fila sin confirmar, lo tildado y no confirmado se pierde.
+- Si cambiás algo en un Excel (aunque sea una celda), la app lo toma como archivos nuevos y empieza
+  de cero.
+- Si cambiás de fila sin tocar «Asociar», lo tildado y no asociado se pierde.
 - Una fila de LG sin fecha válida no tiene candidatos automáticos: hay que usar el buscador.
 - Al exportar, las horas que venían como hora de Excel quedan como texto (ej. "08:15:00").
+
+La configuración de la app está en `.streamlit/config.toml`: solo se abre en tu compu (`localhost`),
+no manda estadísticas y no vigila los archivos (más rápido en discos de red; si se actualiza el código,
+cerrá y volvé a abrir la app).
 
 ## Trabajar desde dos computadoras
 

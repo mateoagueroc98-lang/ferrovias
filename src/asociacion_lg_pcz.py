@@ -286,14 +286,24 @@ def avisos(transcripcion) -> list[str]:
     return [r.strip() for r in str(transcripcion).splitlines() if r.strip()]
 
 
+# Columnas que pueden no estar en el archivo de LG
+OPCIONALES_LG = ("Página", "Hora")
+
+
 def preparar_lg(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
-    """Tabla de trabajo de LG: una fila por párrafo, con fecha y hora ya normalizadas."""
+    """Tabla de trabajo de LG: una fila por párrafo, con fecha y hora ya normalizadas.
+
+    mapa: {nombre canónico: columna del archivo}. Página y Hora son opcionales.
+    """
+    vacia = pd.Series([None] * len(df), index=df.index, dtype=object)
+    pagina = df[mapa["Página"]] if "Página" in mapa else vacia
+    hora = df[mapa["Hora"]] if "Hora" in mapa else vacia
     t = pd.DataFrame({
-        "pagina": df[mapa["Página"]].map(lambda v: "" if pd.isna(v) else id_novedad(v)),
+        "pagina": pagina.map(lambda v: "" if pd.isna(v) else id_novedad(v)),
         "fecha_original": df[mapa["Fecha"]],
         "fecha": df[mapa["Fecha"]].map(parsear_fecha),
-        "hora": df[mapa["Hora"]].map(parsear_hora),
-        "hora_original": df[mapa["Hora"]],
+        "hora": hora.map(parsear_hora),
+        "hora_original": hora,
         "avisos": df[mapa["Transcripción"]].map(avisos),
     })
     t["texto"] = t["avisos"].map(" ".join)
@@ -426,6 +436,46 @@ def deshacer(sesion: dict) -> int | None:
     sesion["filas"][str(ultimo["fila"])] = ultimo["antes"]
     sesion["posicion"] = ultimo["fila"]
     return ultimo["fila"]
+
+
+def grupos_de_fila(d: dict, n_avisos: int) -> list[dict]:
+    """Asociaciones guardadas de una fila como grupos [{"avisos": [...], "novedades": [...]}].
+
+    Cada grupo junta las novedades elegidas para los mismos avisos. Una novedad guardada
+    sin avisos (sesiones viejas) corresponde al párrafo entero.
+    """
+    if d["estado"] != "asociada":
+        return []
+    grupos: dict[tuple, list[str]] = {}
+    for nov in d["novedades"]:
+        renglones = tuple(sorted(d.get("avisos", {}).get(nov) or range(n_avisos)))
+        grupos.setdefault(renglones, []).append(nov)
+    return [{"avisos": list(k), "novedades": v} for k, v in grupos.items()]
+
+
+def unir_grupos(grupos: list[dict]) -> tuple[list[str], dict[str, list[int]]]:
+    """Grupos -> (novedades, {novedad: avisos}) para guardar con registrar()."""
+    novedades: list[str] = []
+    avisos_por_novedad: dict[str, set[int]] = {}
+    for g in grupos:
+        for nov in g["novedades"]:
+            if nov not in novedades:
+                novedades.append(nov)
+            avisos_por_novedad.setdefault(nov, set()).update(g["avisos"])
+    return novedades, {n: sorted(v) for n, v in avisos_por_novedad.items()}
+
+
+def avisos_cubiertos(grupos: list[dict]) -> set[int]:
+    return {i for g in grupos for i in g["avisos"]}
+
+
+def fila_con_avisos(fila_lg: pd.Series, renglones: list[int]) -> pd.Series:
+    """Copia de la fila de LG cuyo texto son solo los avisos elegidos (para puntuar)."""
+    elegidos = [fila_lg["avisos"][i] for i in renglones if 0 <= i < len(fila_lg["avisos"])]
+    fila = fila_lg.copy()
+    if elegidos:
+        fila["texto"] = " ".join(elegidos)
+    return fila
 
 
 def asociaciones_por_novedad(sesion: dict) -> dict[str, list[int]]:
