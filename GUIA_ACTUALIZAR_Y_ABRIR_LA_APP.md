@@ -137,8 +137,9 @@ Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias
 5. Ir a la carpeta `ferrovias` de `Y:`, pegar (`Ctrl + V`) y elegir
    **Reemplazar los archivos en el destino**.
 
-> **Ojo:** pegar **encima**, no borrar la carpeta `ferrovias` vieja. El ZIP no trae `datos\`
-> (Excels y asociaciones guardadas) ni `.env` (clave), así que si se borra la carpeta se pierden.
+> **Ojo:** pegar **encima**, no borrar la carpeta `ferrovias` vieja. El ZIP trae la carpeta
+> `datos\` **vacía** (sin tus Excels ni asociaciones guardadas) y trae `.env.example` (el modelo),
+> no tu `.env` con la clave. Si se borra la carpeta, eso se pierde.
 
 Para probar una rama que todavía no está en `main`: en GitHub elegirla en el menú de ramas
 (arriba a la izquierda, dice `main`) **antes** de tocar **Code → Download ZIP**.
