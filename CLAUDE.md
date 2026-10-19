@@ -31,7 +31,7 @@ descargar con nombre elegido. Las claves se normalizan (101 == 101.0, fechas sin
 
 **Asociación LG ↔ PCZ**: asociar a mano filas del Libro de Guardia con novedades del PCZ. Candidatos
 solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple sin IA.
-Sesión autoguardada en `datos/sesiones/` (ignorado). Export con hojas LG_asociado, PCZ_completado y
+El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas LG_asociado, PCZ_completado y
 Resumen. Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
 
 ## Reglas
