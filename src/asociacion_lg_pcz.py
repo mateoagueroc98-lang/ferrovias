@@ -158,8 +158,12 @@ def horas_en_texto(texto: str) -> list[tuple[int, int, int]]:
     ]
 
 
-def formatear_hora(minutos: int | None) -> str:
-    return f"{minutos // 60:02d}:{minutos % 60:02d}" if minutos is not None else ""
+def formatear_hora(minutos) -> str:
+    """Minutos desde las 00:00 -> "HH:MM" (vacío si no hay hora)."""
+    if minutos is None or pd.isna(minutos):
+        return ""
+    minutos = int(minutos)
+    return f"{minutos // 60:02d}:{minutos % 60:02d}"
 
 
 # ------------------------------------------------------------------- tokens
@@ -300,7 +304,8 @@ def preparar_lg(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
         "pagina": pagina.map(lambda v: "" if pd.isna(v) else id_novedad(v)),
         "fecha_original": df[mapa["Fecha"]],
         "fecha": df[mapa["Fecha"]].map(parsear_fecha),
-        "hora": hora.map(parsear_hora),
+        # dtype object: si no, con filas sin hora pandas pasa los minutos a decimales (510.0)
+        "hora": pd.Series([parsear_hora(v) for v in hora], index=df.index, dtype=object),
         "hora_original": hora,
         "avisos": df[mapa["Transcripción"]].map(avisos),
     })

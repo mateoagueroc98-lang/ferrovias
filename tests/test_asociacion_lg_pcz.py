@@ -251,3 +251,13 @@ def test_preparar_pcz_sin_n_novedad_usa_fila_del_excel():
     df = pd.DataFrame({"Detalle": ["a", "b"], "Día": ["04/03/2025", "05/03/2025"]})
     pcz = a.preparar_pcz(df, {"Descripción": "Detalle", "Fecha": "Día"})
     assert list(pcz["id"]) == ["2", "3"]
+
+
+def test_hora_con_filas_vacias_se_muestra_bien():
+    # Si algunas filas no tienen hora, pandas pasaba las horas a decimales (510.0) y fallaba
+    df = pd.DataFrame({"Fecha": ["04/03/2025", "04/03/2025"], "Hora": ["08:30", None],
+                       "Transcripción": ["a", "b"]})
+    lg = a.preparar_lg(df, {"Fecha": "Fecha", "Hora": "Hora", "Transcripción": "Transcripción"})
+    assert a.formatear_hora(lg.loc[0, "hora"]) == "08:30"
+    assert a.formatear_hora(lg.loc[1, "hora"]) == ""
+    assert a.formatear_hora(510.0) == "08:30" and a.formatear_hora(float("nan")) == ""
