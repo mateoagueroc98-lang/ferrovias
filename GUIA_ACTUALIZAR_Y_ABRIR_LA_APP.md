@@ -66,29 +66,10 @@ streamlit run app.py
 El nombre de la rama se ve en GitHub, en la pestaña **Pull requests** o en el menú de ramas.
 Para volver a la versión estable: `git checkout main`.
 
-### Borrar las asociaciones guardadas (módulo Asociación LG ↔ PCZ)
+### Empezar de cero en el módulo Asociación LG ↔ PCZ
 
-Las asociaciones guardadas están en la carpeta `datos/sesiones`. Para empezar de cero:
-
-1. Cerrar la app con `Ctrl + C` en la Terminal.
-2. Borrar la carpeta:
-
-   ```bash
-   cd ~/Documents/ferrovias
-   rm -rf datos/sesiones
-   ```
-
-3. Abrir la app de nuevo (con el `(.venv)` activo):
-
-   ```bash
-   streamlit run app.py
-   ```
-
-4. En el navegador, **cerrar la pestaña vieja** de la app y abrir una nueva en
-   `http://localhost:8501`. Si no, la pestaña vieja puede seguir mostrando lo que tenía en memoria.
-
-> **Ojo:** esto borra todo el progreso guardado **en esta Mac**, de todos los pares de Excel.
-> Las asociaciones de la compu del trabajo no se tocan, porque están guardadas allá.
+La app ya no guarda asociaciones: alcanza con **recargar la página** (o cerrar y volver a abrir la
+app). Ojo: lo que no hayas descargado en **3. Exportar** se pierde.
 
 ### Instalación (solo la primera vez en esta Mac)
 
@@ -183,11 +164,6 @@ Para probar una rama que todavía no está en `main`: en GitHub elegirla en el m
 4. *(Opcional, para módulos con IA)*: `copy .env.example .env` y `notepad .env` para pegar la
    clave de Anthropic.
 
-### Borrar las asociaciones guardadas (módulo Asociación LG ↔ PCZ)
+### Empezar de cero en el módulo Asociación LG ↔ PCZ
 
-1. Cerrar la app con `Ctrl + C` en la ventana negra.
-2. En el Explorador, entrar a `ferrovias\datos` y borrar la carpeta `sesiones`.
-3. Abrir la app de nuevo y, en Chrome, cerrar la pestaña vieja y abrir una nueva en
-   `http://localhost:8501`.
-
-Esto borra solo lo guardado en la compu del trabajo; lo de la Mac no se toca.
+Igual que en la Mac: recargar la página o volver a abrir la app (no hay nada guardado que borrar).

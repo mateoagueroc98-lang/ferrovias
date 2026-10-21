@@ -1,6 +1,5 @@
 """Módulo: asociación manual de filas del Libro de Guardia (LG) con novedades del PCZ."""
 import re
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -12,7 +11,6 @@ st.title("Asociación LG ↔ PCZ")
 
 ss = st.session_state
 P = "lgpcz_"  # prefijo de las claves de este módulo en session_state
-CARPETA_SESIONES = Path(__file__).resolve().parent.parent / "datos" / "sesiones"
 PASOS = ["1. Carga", "2. Asociación", "3. Exportar"]
 
 
@@ -28,18 +26,13 @@ def preparar(nombre_lg, bytes_lg, nombre_pcz, bytes_pcz, mapa_lg, mapa_pcz):
     return lg, pcz
 
 
-def guardar():
-    try:
-        a.guardar_sesion(ss[P + "sesion"], CARPETA_SESIONES)
-    except OSError as e:
-        ss[P + "msg"] = ("error", f"No se pudo guardar el progreso: {e}")
-
-
 def ir_a_paso(paso: str):
     ss[P + "paso"] = paso
 
 
 paso = st.radio("Paso", PASOS, horizontal=True, key=P + "paso", label_visibility="collapsed")
+st.caption("⚠️ El progreso **no se guarda**: si cerrás la app o recargás la página, se pierde. "
+           "Antes de cerrar, descargá el Excel en **3. Exportar**.")
 
 if msg := ss.pop(P + "msg", None):
     getattr(st, msg[0])(msg[1])
@@ -171,20 +164,15 @@ if lg.empty:
     st.error("El archivo de LG no tiene filas.")
     st.stop()
 
-# ------------------------------------------------ sesión (autoguardado)
+# ------------------------------------------- estado del trabajo (en memoria)
+# No se guarda en disco: si se cargan otros archivos, se cierra la app o se recarga la página,
+# se empieza de cero.
 huella = a.huella(archivos["lg"]["bytes"], archivos["pcz"]["bytes"])
-if ss.get(P + "sesion", {}).get("huella") != huella:
-    previa = a.cargar_sesion(CARPETA_SESIONES, huella)
-    if previa and len(previa["filas"]) == len(lg):
-        ss[P + "sesion"] = previa
-        p = a.progreso(previa)
-        ss[P + "msg"] = ("info", f"Se retomó la sesión guardada de estos archivos: "
-                                 f"{p['total'] - p['pendientes']} de {p['total']} filas resueltas.")
-    else:
-        ss[P + "sesion"] = a.sesion_nueva(huella, archivos["lg"]["nombre"], archivos["pcz"]["nombre"], len(lg))
+if ss.get(P + "trabajo", {}).get("huella") != huella:
+    ss[P + "trabajo"] = a.trabajo_nuevo(huella, len(lg))
     ss[P + "ver"] = ss.get(P + "ver", 0) + 1
     st.rerun()
-sesion = ss[P + "sesion"]
+trabajo = ss[P + "trabajo"]
 ss.setdefault(P + "ver", 0)
 
 if paso == PASOS[0]:
@@ -210,7 +198,7 @@ if paso == PASOS[0]:
 
 # ================================================================== 3. Exportar
 if paso == PASOS[2]:
-    p = a.progreso(sesion)
+    p = a.progreso(trabajo)
     st.header("Exportar a Excel")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Filas de LG", p["total"])
@@ -219,7 +207,7 @@ if paso == PASOS[2]:
     m4.metric("Pendientes", p["pendientes"])
     if p["pendientes"]:
         st.warning(f"Quedan {p['pendientes']} fila(s) pendientes: se exportan con estado «Pendiente».")
-    multiples = {k: v for k, v in a.asociaciones_por_novedad(sesion).items() if len(v) > 1}
+    multiples = {k: v for k, v in a.asociaciones_por_novedad(trabajo).items() if len(v) > 1}
     if multiples:
         st.info("Novedades asociadas a más de una fila de LG (su «Texto LG» junta todos con « / »): "
                 + "; ".join(f"{k} → filas {', '.join(str(f + 1) for f in v)}" for k, v in multiples.items()))
@@ -231,7 +219,7 @@ if paso == PASOS[2]:
     nombre = st.text_input("Nombre del archivo a descargar", value="asociacion_LG_PCZ")
     # Sacar caracteres que Windows no acepta en nombres de archivo
     nombre = re.sub(r'[\\/:*?"<>|]', "", nombre).strip().removesuffix(".xlsx") or "asociacion_LG_PCZ"
-    st.download_button(f"⬇️ Descargar {nombre}.xlsx", a.exportar(lg_original, pcz_original, lg, pcz, sesion),
+    st.download_button(f"⬇️ Descargar {nombre}.xlsx", a.exportar(lg_original, pcz_original, lg, pcz, trabajo),
                        f"{nombre}.xlsx", type="primary")
     st.stop()
 
@@ -242,7 +230,7 @@ if paso == PASOS[2]:
 # Cada asociación (avisos -> novedades) se guarda al instante; si quedan avisos sin
 # asociar se vuelve al paso A.
 n = len(lg)
-asociadas_a = a.asociaciones_por_novedad(sesion)
+asociadas_a = a.asociaciones_por_novedad(trabajo)
 
 
 def _escapar(texto: str) -> str:
@@ -252,7 +240,7 @@ def _escapar(texto: str) -> str:
 
 def borrador() -> dict:
     """Elección en curso de la fila actual (paso, avisos y novedades tildados)."""
-    pos, ver = sesion["posicion"], ss[P + "ver"]
+    pos, ver = trabajo["posicion"], ss[P + "ver"]
     b = ss.get(P + "borrador")
     if not b or b["fila"] != pos or b["ver"] != ver:
         n_avisos = len(lg.loc[pos, "avisos"])
@@ -265,14 +253,13 @@ def borrador() -> dict:
 
 
 def grupos_actuales() -> list[dict]:
-    pos = sesion["posicion"]
-    return a.grupos_de_fila(sesion["filas"][str(pos)], len(lg.loc[pos, "avisos"]))
+    pos = trabajo["posicion"]
+    return a.grupos_de_fila(trabajo["filas"][str(pos)], len(lg.loc[pos, "avisos"]))
 
 
 def mover(destino: int):
-    sesion["posicion"] = max(0, min(n - 1, destino))
+    trabajo["posicion"] = max(0, min(n - 1, destino))
     ss[P + "ver"] += 1
-    guardar()
 
 
 def tildar(lista: str, valor, clave: str):
@@ -285,7 +272,7 @@ def tildar(lista: str, valor, clave: str):
 
 def todos_los_avisos():
     b = borrador()
-    b["avisos"] = list(range(len(lg.loc[sesion["posicion"], "avisos"])))
+    b["avisos"] = list(range(len(lg.loc[trabajo["posicion"], "avisos"])))
     ss[P + "ver"] += 1
     ss[P + "borrador"] = {**b, "ver": ss[P + "ver"]}
 
@@ -303,7 +290,7 @@ def volver_a_avisos():
 
 
 def siguiente_fila():
-    pos = sesion["posicion"]
+    pos = trabajo["posicion"]
     if pos == n - 1:
         ss[P + "msg"] = ("success", "Llegaste a la última fila. Revisá las pendientes o pasá a "
                                     "**3. Exportar**.")
@@ -312,13 +299,13 @@ def siguiente_fila():
 
 def asociar():
     """Guarda el grupo avisos -> novedades elegido y sigue."""
-    pos, b = sesion["posicion"], borrador()
+    pos, b = trabajo["posicion"], borrador()
     if not b["novedades"]:
         ss[P + "msg"] = ("error", "No elegiste ninguna novedad. Tildá al menos una o usá "
                                   "«Ninguna corresponde».")
         return
     grupos = grupos_actuales() + [{"avisos": sorted(b["avisos"]), "novedades": list(b["novedades"])}]
-    a.registrar(sesion, pos, "asociada", *a.unir_grupos(grupos))
+    a.registrar(trabajo, pos, "asociada", *a.unir_grupos(grupos))
     n_avisos = len(lg.loc[pos, "avisos"])
     faltan = n_avisos - len(a.avisos_cubiertos(grupos) & set(range(n_avisos)))
     if faltan > 0:
@@ -326,35 +313,32 @@ def asociar():
         ss[P + "msg"] = ("success", f"Asociado. Quedan {faltan} aviso(s) sin asociar: elegí otros o "
                                     "tocá «Terminar fila y seguir».")
         ss[P + "ver"] += 1
-        guardar()
     else:
         siguiente_fila()
 
 
 def quitar_grupo(i: int):
-    pos = sesion["posicion"]
+    pos = trabajo["posicion"]
     grupos = grupos_actuales()
     del grupos[i]
     if grupos:
-        a.registrar(sesion, pos, "asociada", *a.unir_grupos(grupos))
+        a.registrar(trabajo, pos, "asociada", *a.unir_grupos(grupos))
     else:
-        a.registrar(sesion, pos, "pendiente")
+        a.registrar(trabajo, pos, "pendiente")
     ss[P + "ver"] += 1
-    guardar()
 
 
 def accion(tipo: str):
-    pos = sesion["posicion"]
+    pos = trabajo["posicion"]
     if tipo == "ninguna":
-        a.registrar(sesion, pos, "ninguna")
+        a.registrar(trabajo, pos, "ninguna")
     elif tipo == "saltar":
-        a.registrar(sesion, pos, "pendiente")
+        a.registrar(trabajo, pos, "pendiente")
     elif tipo == "deshacer":
-        if a.deshacer(sesion) is None:
+        if a.deshacer(trabajo) is None:
             ss[P + "msg"] = ("info", "No hay nada para deshacer.")
             return
         ss[P + "ver"] += 1
-        guardar()
         return
     siguiente_fila()
 
@@ -364,7 +348,7 @@ def ir_a_fila():
 
 
 def proxima_pendiente():
-    sig = a.siguiente_pendiente(sesion, sesion["posicion"])
+    sig = a.siguiente_pendiente(trabajo, trabajo["posicion"])
     if sig is None:
         ss[P + "msg"] = ("success", "¡No quedan filas pendientes!")
     else:
@@ -372,42 +356,99 @@ def proxima_pendiente():
 
 
 st.html("""<style>
+/* Tarjetas que se eligen con un clic (avisos en el paso 1, novedades en el paso 2) */
 [class*="st-key-tarjeta_"] { cursor: pointer; }
 [class*="st-key-tarjeta_"]:has(input:checked) { background: rgba(27, 74, 122, 0.10); border-color: #1B4A7A; }
 mark { background: #FFE27A; color: inherit; padding: 0 .1em; border-radius: 2px; }
+/* Tarjetas fijas de la tabla LG ↔ PCZ */
+.tj { border: 1px solid rgba(128, 128, 128, 0.35); border-radius: 0.5rem; padding: 0.6rem 0.8rem;
+      margin-bottom: 0.5rem; line-height: 1.45; }
+.tj-lg, [class*="st-key-tarjeta_a_"] { border-left: 4px solid #1D2A33 !important; }
+.tj-lg { font-size: 0.9rem; }
+.tj-pcz { border-left: 4px solid #1B4A7A; background: rgba(27, 74, 122, 0.07); }
+.tj-vacia { border-style: dashed; opacity: 0.55; text-align: center; font-size: 0.9rem; }
+.tj-num { font-size: 0.78rem; font-weight: 600; opacity: 0.7; margin-bottom: 0.15rem; }
+.tj-aviso { font-size: 0.8rem; color: #8A5E00; margin-top: 0.25rem; }
+.col-titulo { font-size: 0.85rem; font-weight: 600;
+              opacity: 0.55; margin-bottom: 0.3rem; }
+.flecha { text-align: center; font-size: 1.4rem; opacity: 0.45; padding-top: 0.6rem; }
+.pasos { font-size: 0.95rem; margin: 0.2rem 0 0.6rem 0; }
+.pasos .off { opacity: 0.4; }
 </style>""")
 
-pos = sesion["posicion"]
+pos = trabajo["posicion"]
 fila = lg.loc[pos]
-guardada = sesion["filas"][str(pos)]
+guardada = trabajo["filas"][str(pos)]
 b = borrador()
 ver = ss[P + "ver"]
 grupos = grupos_actuales()
 cubiertos = a.avisos_cubiertos(grupos)
 n_avisos = len(fila["avisos"])
+desc_por_id = dict(zip(pcz["id"], pcz["descripcion"]))
+fecha_por_id = dict(zip(pcz["id"], pcz["fecha"]))
 
-# ------------------------------------------------------------------ progreso
-p = a.progreso(sesion)
-st.progress((p["total"] - p["pendientes"]) / p["total"])
-m1, m2, m3, m4, m5 = st.columns(5)
-m1.metric("Fila", f"{pos + 1} de {n}")
-m2.metric("Asociadas", p["asociadas"])
-m3.metric("Ninguna corresponde", p["ninguna"])
-m4.metric("Pendientes", p["pendientes"])
-with m5:
-    st.number_input("Ir a fila", 1, n, pos + 1, key=f"{P}ir_a_{ver}", on_change=ir_a_fila)
-    st.button("Próxima pendiente", on_click=proxima_pendiente, use_container_width=True)
+
+def html_lg(texto: str) -> str:
+    return f"<div class='tj tj-lg'>{a.resaltar(texto, set())}</div>"
+
+
+def html_pcz(nov: str) -> str:
+    otras = [f + 1 for f in asociadas_a.get(nov, []) if f != pos]
+    aviso_otras = (f"<div class='tj-aviso'>⚠️ también asociada a LG fila {', '.join(map(str, otras))}</div>"
+                   if otras else "")
+    return (f"<div class='tj tj-pcz'><div class='tj-num'>N° {nov} · {a.formatear_fecha(fecha_por_id.get(nov))}"
+            f"</div>{a.resaltar(desc_por_id.get(nov, '(no está en el archivo de PCZ)'), set())}{aviso_otras}</div>")
+
+
+def html_vacia(texto: str) -> str:
+    return f"<div class='tj tj-vacia'>{texto}</div>"
+
+
+def fila_tabla(izquierda, derecha, flecha: bool = True):
+    """Una fila de la tabla: tarjetas de LG a la izquierda y de PCZ a la derecha, a la misma altura."""
+    c1, c2, c3 = st.columns([10, 1, 10])
+    with c1:
+        izquierda()
+    c2.markdown(f"<div class='flecha'>{'→' if flecha else ''}</div>", unsafe_allow_html=True)
+    with c3:
+        derecha()
+
+
+def titulos_tabla(derecha: str):
+    c1, _, c3 = st.columns([10, 1, 10])
+    c1.markdown("<div class='col-titulo'>📘 Libro de Guardia</div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='col-titulo'>📋 {derecha}</div>", unsafe_allow_html=True)
+
+
+# ----------------------------------------------------------- barra superior
+p = a.progreso(trabajo)
+nav = st.columns([1, 4, 1], vertical_alignment="center")
+nav[0].button("⬅️ Anterior", on_click=mover, args=(pos - 1,), disabled=pos == 0, use_container_width=True)
+with nav[1]:
+    st.markdown(
+        f"<div style='text-align:center'><b>Fila {pos + 1} de {n}</b> &nbsp;·&nbsp; ✅ {p['asociadas']} "
+        f"asociadas &nbsp;·&nbsp; 🚫 {p['ninguna']} ninguna &nbsp;·&nbsp; ⏳ {p['pendientes']} pendientes</div>",
+        unsafe_allow_html=True)
+    st.progress((p["total"] - p["pendientes"]) / p["total"])
+nav[2].button("➡️ Siguiente", on_click=mover, args=(pos + 1,), disabled=pos == n - 1, use_container_width=True)
 
 # --------------------------------------------------------------- fila de LG
 ESTADO_ICONO = {"asociada": "✅ Asociada", "ninguna": "🚫 Ninguna corresponde", "pendiente": "⏳ Pendiente"}
 with st.container(border=True):
     hora = a.formatear_hora(fila["hora"]) if pd.notna(fila["hora"]) else (
         "" if pd.isna(fila["hora_original"]) else str(fila["hora_original"]))
+    h1, h2 = st.columns([4, 1], vertical_alignment="center")
+    h1.subheader(f"LG fila {pos + 1}", anchor=False)
+    h1.caption(f"Página {fila['pagina'] or '—'} · {a.formatear_fecha(fila['fecha'])} · {hora or 'sin hora'}")
+    h2.markdown(f"<div style='text-align:right'>{ESTADO_ICONO[guardada['estado']]}</div>", unsafe_allow_html=True)
+    en_paso_1 = b["etapa"] == "avisos"
     st.markdown(
-        f"#### LG fila {pos + 1} &nbsp;·&nbsp; Página {fila['pagina'] or '—'} &nbsp;·&nbsp; "
-        f"{a.formatear_fecha(fila['fecha'])} &nbsp;·&nbsp; {hora or 'sin hora'}"
-    )
-    st.caption(f"Estado guardado: {ESTADO_ICONO[guardada['estado']]}")
+        "<div class='pasos'>"
+        + ("<b>① Elegí los avisos</b>" if en_paso_1 else "<span class='off'>① Elegí los avisos</span>")
+        + " &nbsp;›&nbsp; "
+        + ("<b>② Elegí las novedades de PCZ</b>" if not en_paso_1
+           else "<span class='off'>② Elegí las novedades de PCZ</span>")
+        + "</div>", unsafe_allow_html=True)
     if fila["fecha"] is None:
         st.error(
             f"La fecha de esta fila no se pudo interpretar (viene como «{fila['fecha_original']}»). "
@@ -416,85 +457,99 @@ with st.container(border=True):
     if not n_avisos:
         st.warning("Esta fila no tiene transcripción.")
 
-    if b["etapa"] == "avisos":
-        # ---------------------------------------------- Paso A: elegir avisos
-        st.markdown("**Paso A · ¿Qué aviso(s) vas a asociar?** Tocá una o varias tarjetas.")
-        for i, aviso in enumerate(fila["avisos"]):
-            novs = [nv for g in grupos if i in g["avisos"] for nv in g["novedades"]]
-            with st.container(border=True, key=f"tarjeta_a_{ver}_{pos}_{i}"):
-                c1, c2 = st.columns([1, 5])
-                clave = f"{P}aviso_{ver}_{pos}_{i}"
-                c1.checkbox(f"\\[{i + 1}\\] Aviso {i + 1}", value=i in b["avisos"], key=clave,
-                            on_change=tildar, args=("avisos", i, clave))
-                marca = ("<span style='background:#2F7D4A;color:#fff;padding:1px 6px;border-radius:4px'>"
-                         f"✔ asociado a N° {', '.join(novs)}</span><br>") if novs else ""
-                c2.markdown(marca + f"<span style='font-size:1.05rem'>{a.resaltar(aviso, set())}</span>",
-                            unsafe_allow_html=True)
-        st.button("☑ Tildar todos", on_click=todos_los_avisos)
-    else:
-        # ------------------------------------- Paso B: avisos ya elegidos
-        st.markdown("**Paso B · Elegí la(s) novedad(es) de PCZ para:**")
-        st.markdown(
-            "<ol style='font-size:1.05rem;line-height:1.6'>"
-            + "".join(
-                f"<li value='{i + 1}'><b>{a.resaltar(x, set())}</b></li>" if i in b["avisos"]
-                else f"<li value='{i + 1}' style='opacity:0.4'>{a.resaltar(x, set())}</li>"
-                for i, x in enumerate(fila["avisos"]))
-            + "</ol>",
-            unsafe_allow_html=True,
-        )
+    def tabla_guardada(elegibles: bool):
+        """Tabla LG ↔ PCZ con lo guardado. Con elegibles=True, los avisos son tarjetas para tildar."""
+        dibujados = set()
+        for k, f in enumerate(a.filas_de_tabla(grupos, n_avisos)):
+            grupo = f["novedades"] and next(i for i, g in enumerate(grupos) if g["avisos"] == f["avisos"]
+                                           and g["novedades"] == f["novedades"])
 
-    if grupos:
-        st.markdown("**Asociaciones guardadas en esta fila:**")
-        for i, g in enumerate(grupos):
-            c1, c2 = st.columns([6, 1])
-            c1.markdown("Aviso(s) " + ", ".join(str(x + 1) for x in g["avisos"]) + " → "
-                        + ", ".join(f"N° {nv}" for nv in g["novedades"]))
-            c2.button("🗑️ Quitar", key=f"{P}quitar_{ver}_{pos}_{i}", on_click=quitar_grupo, args=(i,))
-        if n_avisos and len(cubiertos) < n_avisos:
-            st.caption(f"Quedan {n_avisos - len(cubiertos)} aviso(s) sin asociar.")
+            def izquierda(f=f):
+                for i in f["avisos"]:
+                    if elegibles and i not in dibujados:
+                        dibujados.add(i)
+                        with st.container(border=True, key=f"tarjeta_a_{ver}_{pos}_{i}"):
+                            clave = f"{P}aviso_{ver}_{pos}_{i}"
+                            st.checkbox(f"\\[{i + 1}\\] {_escapar(fila['avisos'][i])}", value=i in b["avisos"],
+                                        key=clave, on_change=tildar, args=("avisos", i, clave))
+                    else:
+                        st.markdown(html_lg(f"[{i + 1}] {fila['avisos'][i]}"), unsafe_allow_html=True)
 
-# ----------------------------------------------------------------- botones
-with st.container(border=True):
-    if b["etapa"] == "avisos":
-        c = st.columns([1.6, 1.6, 1.4, 1, 1])
+            def derecha(f=f, k=k, grupo=grupo):
+                if not f["novedades"]:
+                    st.markdown(html_vacia("sin novedad asociada"), unsafe_allow_html=True)
+                    return
+                st.markdown("".join(html_pcz(nv) for nv in f["novedades"]), unsafe_allow_html=True)
+                st.button("🗑️ Quitar esta asociación", key=f"{P}quitar_{ver}_{pos}_{k}",
+                          on_click=quitar_grupo, args=(grupo,))
+
+            fila_tabla(izquierda, derecha, flecha=bool(f["novedades"]))
+
+    if en_paso_1:
+        # ------------------------------------------- Paso 1: elegir avisos
+        st.caption("Tocá uno o varios avisos (las tarjetas de la izquierda) y después «Elegir novedades».")
+        titulos_tabla("Novedades PCZ asociadas")
+        tabla_guardada(elegibles=True)
+        c = st.columns([1.3, 1.3, 1, 2])
         c[0].button("➡️ Elegir novedades", type="primary", on_click=ir_a_novedades,
                     disabled=not b["avisos"], use_container_width=True)
         c[1].button("✅ Terminar fila y seguir", on_click=siguiente_fila, disabled=not grupos,
                     use_container_width=True, help="Deja guardado lo asociado y pasa a la siguiente fila.")
-        atajos = ("**1–9** tildar aviso · **Enter** elegir novedades (o terminar la fila si ya asociaste) · ")
+        if n_avisos > 1:
+            c[2].button("☑ Todos", on_click=todos_los_avisos, use_container_width=True,
+                        help="Tilda todos los avisos del párrafo.")
     else:
-        if b["novedades"]:
-            st.markdown("**Novedades elegidas:** " + ", ".join(f"N° {x}" for x in b["novedades"]))
-            for nov in b["novedades"]:
-                otras = [f + 1 for f in asociadas_a.get(nov, []) if f != pos]
-                if otras:
-                    st.warning(f"La novedad {nov} ya está asociada a LG fila {', '.join(map(str, otras))}.")
-        else:
-            st.markdown("**Novedades elegidas:** ninguna todavía. Tildalas en la lista de abajo.")
-        c = st.columns([1.6, 1.6, 1.4, 1, 1])
-        c[0].button("✅ Asociar", type="primary", on_click=asociar, use_container_width=True)
+        # ------------------------------------- Paso 2: nueva asociación
+        st.caption("Tildá abajo una o varias novedades: van apareciendo a la derecha. Después tocá «Asociar».")
+        titulos_tabla("Novedades elegidas")
+
+        def izquierda_nueva():
+            for i in b["avisos"]:
+                st.markdown(html_lg(f"[{i + 1}] {fila['avisos'][i]}"), unsafe_allow_html=True)
+
+        def derecha_nueva():
+            if b["novedades"]:
+                st.markdown("".join(html_pcz(nv) for nv in b["novedades"]), unsafe_allow_html=True)
+            else:
+                st.markdown(html_vacia("todavía ninguna ↓ elegila en la lista de abajo"), unsafe_allow_html=True)
+
+        fila_tabla(izquierda_nueva, derecha_nueva)
+        c = st.columns([1.3, 1.3, 3])
+        c[0].button("✅ Asociar", type="primary", on_click=asociar, disabled=not b["novedades"],
+                    use_container_width=True)
         c[1].button("⬅️ Volver a elegir avisos", on_click=volver_a_avisos, disabled=n_avisos <= 1,
                     use_container_width=True)
-        atajos = "**1–9** tildar novedad · **Enter** asociar · "
-    c[2].button("🚫 Ninguna corresponde", on_click=accion, args=("ninguna",), use_container_width=True,
-                help="Marca toda la fila como sin novedad en PCZ.")
-    c[3].button("⏭️ Saltar", on_click=accion, args=("saltar",), use_container_width=True,
-                help="Deja la fila pendiente (borra lo asociado en ella) y pasa a la siguiente.")
-    c[4].button("↩️ Deshacer", on_click=accion, args=("deshacer",), use_container_width=True,
-                disabled=not sesion["historial"])
-    n1, _, n2 = st.columns([1, 4, 1])
-    n1.button("⬅️ Anterior", on_click=mover, args=(pos - 1,), disabled=pos == 0, use_container_width=True)
-    n2.button("➡️ Siguiente", on_click=mover, args=(pos + 1,), disabled=pos == n - 1, use_container_width=True)
-    st.caption("Atajos: " + atajos + "**← →** fila anterior/siguiente · **N** ninguna corresponde · "
-               "**S** saltar. (No funcionan mientras escribís en el buscador.)")
+        if grupos:
+            with st.expander(f"Asociaciones ya guardadas en esta fila ({len(grupos)})"):
+                titulos_tabla("Novedades PCZ asociadas")
+                tabla_guardada(elegibles=False)
+
+# ---------------------------------------------------- acciones secundarias
+s1, s2, s3, s4, s5 = st.columns([1.4, 1, 1, 1, 1.2])
+s1.button("🚫 Ninguna corresponde", on_click=accion, args=("ninguna",), use_container_width=True,
+          help="Marca toda la fila como sin novedad en PCZ y pasa a la siguiente.")
+s2.button("⏭️ Saltar", on_click=accion, args=("saltar",), use_container_width=True,
+          help="Deja la fila pendiente (borra lo asociado en ella) y pasa a la siguiente.")
+s3.button("↩️ Deshacer", on_click=accion, args=("deshacer",), use_container_width=True,
+          disabled=not trabajo["historial"])
+with s4.popover("🔎 Ir a…", use_container_width=True):
+    st.number_input("Fila", 1, n, pos + 1, key=f"{P}ir_a_{ver}", on_change=ir_a_fila)
+    st.button("Próxima pendiente", on_click=proxima_pendiente, use_container_width=True)
+with s5.popover("⌨️ Atajos", use_container_width=True):
+    st.markdown("- **1–9**: tildar aviso (paso 1) o novedad (paso 2)\n"
+                "- **Enter**: elegir novedades / asociar\n"
+                "- **← →**: fila anterior / siguiente\n"
+                "- **N**: ninguna corresponde · **S**: saltar\n\n"
+                "No funcionan mientras escribís en el buscador.")
 
 # -------------------------------------------------------------- candidatos
 if b["etapa"] == "pcz":
-    st.subheader("Novedades de PCZ candidatas")
-    f1, f2 = st.columns([3, 2])
+    st.subheader("Novedades de PCZ " + (f"del {a.formatear_fecha(fila['fecha'])}" if fila["fecha"] else ""),
+                 anchor=False)
+    f1, f2 = st.columns([3, 2], vertical_alignment="bottom")
     busqueda = f1.text_input("🔎 Buscar en las novedades", key=f"{P}buscar_{pos}",
-                             placeholder="Ej.: Boulogne 14  (filtra por N° o descripción)")
+                             placeholder="Ej.: Boulogne 14  (filtra por N° o descripción)",
+                             label_visibility="collapsed")
     vecinos = f2.toggle("Ver también día anterior / siguiente", key=P + "vecinos",
                         help="Para eventos que cruzan la medianoche. Se muestran marcados como OTRO DÍA.")
 
@@ -510,10 +565,11 @@ if b["etapa"] == "pcz":
     sin_fecha = a.buscar(a.pcz_sin_fecha(fila_sel, pcz), busqueda)
 
     if fila["fecha"] is not None:
-        st.caption(f"{del_dia} novedad(es) del {a.formatear_fecha(fila['fecha'])}"
+        st.caption(f"{del_dia} novedad(es) ese día"
                    + (f" · {len(cands)} coinciden con la búsqueda" if busqueda else "")
-                   + ". Puntaje (con los avisos elegidos): número compartido 3 (1 si es de una cifra) · "
-                     "palabra compartida 1 · hora cercana hasta 3. Se resaltan las coincidencias.")
+                   + " · ordenadas por parecido con los avisos elegidos (en amarillo, lo que coincide)",
+                   help="Puntaje: número compartido 3 (1 si es de una cifra) · palabra compartida 1 · "
+                        "hora cercana hasta 3.")
 
     en_esta_fila = {nv: g["avisos"] for g in grupos for nv in g["novedades"]}
 
@@ -596,8 +652,8 @@ with st.expander("Lista de todas las filas de LG"):
     st.dataframe(pd.DataFrame({
         "Fila": range(1, n + 1),
         "Fecha": lg["fecha"].map(a.formatear_fecha),
-        "Estado": [a.ESTADOS[sesion["filas"][str(i)]["estado"]] for i in range(n)],
-        "Novedades": [";".join(sesion["filas"][str(i)]["novedades"]) for i in range(n)],
+        "Estado": [a.ESTADOS[trabajo["filas"][str(i)]["estado"]] for i in range(n)],
+        "Novedades": [";".join(trabajo["filas"][str(i)]["novedades"]) for i in range(n)],
         "Transcripción": lg["texto"].str.slice(0, 120),
     }), hide_index=True, use_container_width=True)
 
