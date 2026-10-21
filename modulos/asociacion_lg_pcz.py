@@ -311,8 +311,7 @@ def volver_a_avisos():
 def siguiente_fila():
     pos = trabajo["posicion"]
     if pos == n - 1:
-        ss[P + "msg"] = ("success", "Llegaste a la última fila. Revisá las pendientes («Ir a…») o pasá a "
-                                    "**3. Exportar**.")
+        ss[P + "msg"] = ("success", "Llegaste a la última fila. Si terminaste, pasá a **3. Exportar**.")
     mover(pos + 1)
 
 
@@ -356,24 +355,6 @@ def quitar_grupo(i: int):
     d = fila_actual()
     a.registrar(trabajo, trabajo["posicion"], d["grupos"][:i] + d["grupos"][i + 1:], d["descartados"])
     ss[P + "ver"] += 1
-
-
-def deshacer():
-    if a.deshacer(trabajo) is None:
-        ss[P + "msg"] = ("info", "No hay nada para deshacer.")
-    ss[P + "ver"] += 1
-
-
-def ir_a_fila():
-    mover(ss[f"{P}ir_a_{ss[P + 'ver']}"] - 1)
-
-
-def proxima_pendiente():
-    sig = a.siguiente_pendiente(trabajo, trabajo["posicion"], n_avisos_por_fila)
-    if sig is None:
-        ss[P + "msg"] = ("success", "¡No quedan avisos pendientes!")
-    else:
-        mover(sig)
 
 
 st.html("""<style>
@@ -553,19 +534,6 @@ with st.container(border=True):
             with st.expander(f"Asociaciones ya guardadas en esta fila ({len(grupos)})"):
                 titulos_tabla("Novedades PCZ asociadas")
                 tabla_guardada(elegibles=False)
-
-# ---------------------------------------------------- acciones secundarias
-_, s1, s2, s3 = st.columns([3, 1, 1, 1])
-s1.button("↩️ Deshacer", on_click=deshacer, use_container_width=True, disabled=not trabajo["historial"])
-with s2.popover("🔎 Ir a…", use_container_width=True):
-    st.number_input("Fila", 1, n, pos + 1, key=f"{P}ir_a_{ver}", on_change=ir_a_fila)
-    st.button("Próxima pendiente", on_click=proxima_pendiente, use_container_width=True)
-with s3.popover("⌨️ Atajos", use_container_width=True):
-    st.markdown("- **1–9**: tildar aviso (paso 1) o novedad (paso 2)\n"
-                "- **Enter**: elegir novedades / asociar\n"
-                "- **D**: descartar los avisos tildados\n"
-                "- **← →**: fila anterior / siguiente\n\n"
-                "No funcionan mientras escribís en el buscador.")
 
 # -------------------------------------------------------------- candidatos
 if b["etapa"] == "pcz":
