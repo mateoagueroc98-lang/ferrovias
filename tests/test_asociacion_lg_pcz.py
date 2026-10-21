@@ -55,18 +55,18 @@ def test_horas_en_texto_no_confunde_km():
 
 # ------------------------------------------------------------ columnas
 def test_mapear_columnas_tolerante():
-    df = pd.DataFrame(columns=["  DESCRIPCION ", "fecha", "Nº Novedad"])
+    df = pd.DataFrame(columns=["  DESCRIPCION ", "fecha", "Nº Novedad", "Hora del evento"])
     mapa, faltan = a.mapear_columnas(df, a.COLUMNAS_PCZ)
-    assert faltan == []
+    assert faltan == [] and mapa["Hora"] == "Hora del evento"
     assert mapa["N° Novedad"] == "Nº Novedad"
     for nombre in ["N° Novedad", "N Novedad", "Nro. Novedad", "nº novedad"]:
         _, faltan = a.mapear_columnas(pd.DataFrame(columns=["Descripción", "Fecha", nombre]), a.COLUMNAS_PCZ)
-        assert faltan == [], nombre
+        assert faltan == ["Hora"], nombre  # la hora es opcional
 
 
 def test_mapear_columnas_avisa_faltantes():
     _, faltan = a.mapear_columnas(pd.DataFrame(columns=["Pagina", "Fecha"]), a.COLUMNAS_LG)
-    assert faltan == ["Hora", "Transcripción"]
+    assert faltan == ["Transcripción", "Hora"]
 
 
 # ------------------------------------------------------ filtro por fecha
@@ -261,3 +261,15 @@ def test_hora_con_filas_vacias_se_muestra_bien():
     assert a.formatear_hora(lg.loc[0, "hora"]) == "08:30"
     assert a.formatear_hora(lg.loc[1, "hora"]) == ""
     assert a.formatear_hora(510.0) == "08:30" and a.formatear_hora(float("nan")) == ""
+
+
+def test_hora_de_columna_pcz_suma_al_puntaje():
+    df = pd.DataFrame({"Descripción": ["Falla señal 14", "Falla señal 14"], "Fecha": ["04/03/2025"] * 2,
+                       "N° Novedad": [1, 2], "Hora": ["08:20", "15:00"]})
+    pcz = a.preparar_pcz(df, {"Descripción": "Descripción", "Fecha": "Fecha", "N° Novedad": "N° Novedad",
+                              "Hora": "Hora"})
+    assert list(pcz["hora"]) == [8 * 60 + 20, 15 * 60]
+    lg = pd.Series({"fecha": F(2025, 3, 4), "hora": 8 * 60 + 15, "texto": "Falla señal 14"})
+    c = a.candidatos(lg, pcz)
+    assert list(c["id"]) == ["1", "2"]  # la de hora cercana primero
+    assert c.iloc[0]["puntaje"] == c.iloc[1]["puntaje"] + 3 and "hora a 5 min" in c.iloc[0]["detalle"]

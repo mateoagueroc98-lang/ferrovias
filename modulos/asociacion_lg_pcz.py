@@ -38,65 +38,59 @@ if msg := ss.pop(P + "msg", None):
     getattr(st, msg[0])(msg[1])
 
 # ===================================================================== 1. Carga
+SIN_HORA = "— no tiene hora —"
+FILA_EXCEL = "— usar el número de fila del Excel —"
 ARCHIVOS = [
-    # clave, título, columnas que elige el usuario (con su ayuda), columnas que se buscan solas
+    # clave, título, columnas, ayuda por columna, opción especial de las opcionales
     ("lg", "Libro de Guardia (LG)", a.COLUMNAS_LG, {
         "Fecha": "Se usa para buscar las novedades de PCZ del mismo día.",
         "Transcripción": "Texto del libro: cada renglón es un aviso.",
-    }),
+        "Hora": "Opcional. Suma puntos a las novedades de PCZ con hora cercana "
+                "(además de las horas escritas en el texto).",
+    }, {"Hora": SIN_HORA}),
     ("pcz", "Novedades PCZ", a.COLUMNAS_PCZ, {
         "Fecha": "Se compara con la fecha de LG.",
         "Descripción": "Texto de la novedad: se compara con los avisos de LG.",
-    }),
+        "N° Novedad": "Identifica cada novedad. Es el valor que se escribe en la hoja LG_asociado: si un "
+                      "párrafo del LG queda asociado a varias novedades, sus N° se juntan en la misma "
+                      "celda separados por «;».",
+        "Hora": "Opcional. Suma puntos a las novedades con hora cercana a la de LG "
+                "(además de las horas escritas en la descripción).",
+    }, {"N° Novedad": FILA_EXCEL, "Hora": SIN_HORA}),
 ]
-# Para qué sirve cada columna que la app busca sola por su nombre
-AUTOMATICAS = {
-    "Hora": "ordenar candidatos por cercanía horaria",
-    "Página": "referencia",
-    "N° Novedad": "identificar cada novedad",
-}
 
 
-def resolver_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict, firma: str,
-                      mostrar: bool) -> dict:
-    """{dato: columna del archivo}.
+def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict, especiales: dict,
+                    firma: str, mostrar: bool) -> dict:
+    """{dato: columna del archivo}, elegido con desplegables (en el paso 1).
 
-    Fecha y texto los elige el usuario (en el paso 1, con desplegables que arrancan con lo que
-    se reconoce por nombre). Hora, Página y N° Novedad se buscan solas por nombre.
+    Los desplegables arrancan con lo que se reconoce por nombre. Las columnas opcionales tienen
+    una opción especial (sin hora / usar número de fila) que deja el dato afuera del mapa.
     """
-    sugeridas = a.mapear_columnas(df, esperadas)[0]
     guardado = ss.get(P + "mapa_" + clave, {})
     if guardado.get("_firma") != firma:  # archivo nuevo: arrancar con lo reconocido por nombre
-        guardado = {"_firma": firma, **{c: sugeridas[c] for c in ayudas if c in sugeridas}}
-    mapa = {"_firma": firma}
+        guardado = {"_firma": firma, **a.mapear_columnas(df, esperadas)[0]}
+        for canon, especial in especiales.items():
+            guardado.setdefault(canon, especial)
     if mostrar:
         columnas = list(df.columns)
+        mapa = {"_firma": firma}
         cols = st.columns(2)
         for k, canon in enumerate(ayudas):
+            opciones = ([especiales[canon]] if canon in especiales else []) + columnas
             actual = guardado.get(canon)
-            elegida = cols[k].selectbox(
-                canon, columnas, index=columnas.index(actual) if actual in columnas else None,
+            elegida = cols[k % 2].selectbox(
+                canon + (" (opcional)" if canon == "Hora" else ""), opciones,
+                index=opciones.index(actual) if actual in opciones else None,
                 placeholder="Elegí la columna", help=ayudas[canon], key=f"{P}col_{clave}_{canon}_{firma}",
             )
             if elegida is not None:
                 mapa[canon] = elegida
-    else:
-        mapa.update({c: guardado[c] for c in ayudas if c in guardado})
-    ss[P + "mapa_" + clave] = mapa
-
-    # Las automáticas, salvo que coincidan con una columna ya elegida
-    elegidas = {v for k, v in mapa.items() if k != "_firma"}
-    automaticas = {c: v for c, v in sugeridas.items() if c not in ayudas and v not in elegidas}
-    if mostrar:
-        detectadas = [f"{c} → «{automaticas[c]}» ({uso})" for c, uso in AUTOMATICAS.items() if c in automaticas]
-        if detectadas:
-            st.caption("Detectadas solas: " + " · ".join(detectadas))
-        if "N° Novedad" in esperadas and "N° Novedad" not in automaticas:
-            st.caption("No hay columna de N° Novedad: cada novedad se identifica con su número de fila del Excel.")
-    return {**{k: v for k, v in mapa.items() if k != "_firma"}, **automaticas}
+        ss[P + "mapa_" + clave] = guardado = mapa
+    return {k: v for k, v in guardado.items() if k != "_firma" and v not in especiales.values()}
 
 
-def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, mostrar: bool):
+def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, especiales: dict, mostrar: bool):
     """Sube (solo en el paso 1), lee el archivo y resuelve sus columnas.
 
     Devuelve (tabla original, {dato: columna}) o None si falta algo.
@@ -119,40 +113,42 @@ def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, mostrar: boo
         return None
     firma = a.huella(arch["bytes"])[:12]
     if mostrar:
-        st.caption("Elegí la columna de la fecha y la del texto:")
-    mapa = resolver_columnas(clave, df, esperadas, ayudas, firma, mostrar)
+        st.caption("Indicá qué columna del archivo es cada dato:")
+    mapa = elegir_columnas(clave, df, esperadas, ayudas, especiales, firma, mostrar)
 
-    if faltan := [c for c in ayudas if c not in mapa]:
+    if faltan := [c for c in ayudas if c not in mapa and c not in especiales]:
         if mostrar:
             st.warning("Falta elegir: " + ", ".join(f"**{c}**" for c in faltan) + ".")
         return None
-    if mapa[list(ayudas)[0]] == mapa[list(ayudas)[1]]:
-        st.error("Elegiste la misma columna para la fecha y para el texto.")
+    if repetidas := sorted({c for c in mapa.values() if list(mapa.values()).count(c) > 1}):
+        st.error("Elegiste la misma columna para dos datos distintos: " + ", ".join(f"«{c}»" for c in repetidas))
         return None
     if mostrar:
         st.caption("Así se ven las primeras filas:")
-        texto = list(ayudas)[1]
-        vista = df[[mapa["Fecha"], mapa[texto]]].head(3).set_axis(["Fecha", texto], axis=1)
-        vista.insert(1, "Fecha (cómo la entiende la app)",
+        orden = [c for c in ["N° Novedad", "Fecha", "Hora", "Transcripción", "Descripción"] if c in mapa]
+        vista = df[[mapa[c] for c in orden]].head(3).set_axis(orden, axis=1)
+        vista.insert(orden.index("Fecha") + 1, "Fecha (cómo la entiende la app)",
                      vista["Fecha"].map(lambda v: a.formatear_fecha(a.parsear_fecha(v)) if a.parsear_fecha(v)
                                         else "⚠️ no se entiende"))
+        if "Hora" in vista:
+            vista["Hora"] = vista["Hora"].map(lambda v: a.formatear_hora(a.parsear_hora(v)) or "⚠️ no se entiende")
         st.dataframe(vista.astype(str), hide_index=True, use_container_width=True)
     return df, mapa
 
 
 if paso == PASOS[0]:
     st.caption(
-        "Subí los dos Excel y elegí en cada uno la columna de la fecha y la del texto. Los originales **no se modifican**: "
+        "Subí los dos Excel y elegí qué columna es cada dato. Los originales **no se modifican**: "
         "la app trabaja sobre una copia y el resultado se descarga en un Excel nuevo."
     )
     columnas_pantalla = st.columns(2)
 cargados = {}
-for k, (clave, titulo, esperadas, ayudas) in enumerate(ARCHIVOS):
+for k, (clave, titulo, esperadas, ayudas, especiales) in enumerate(ARCHIVOS):
     if paso == PASOS[0]:
         with columnas_pantalla[k], st.container(border=True):
-            cargados[clave] = archivo(clave, titulo, esperadas, ayudas, mostrar=True)
+            cargados[clave] = archivo(clave, titulo, esperadas, ayudas, especiales, mostrar=True)
     else:
-        cargados[clave] = archivo(clave, titulo, esperadas, ayudas, mostrar=False)
+        cargados[clave] = archivo(clave, titulo, esperadas, ayudas, especiales, mostrar=False)
 
 if not all(cargados.values()):
     if paso == PASOS[0]:
@@ -391,6 +387,7 @@ cubiertos = a.avisos_cubiertos(grupos)
 n_avisos = len(fila["avisos"])
 desc_por_id = dict(zip(pcz["id"], pcz["descripcion"]))
 fecha_por_id = dict(zip(pcz["id"], pcz["fecha"]))
+hora_por_id = dict(zip(pcz["id"], pcz["hora"]))
 
 
 def html_lg(texto: str) -> str:
@@ -402,6 +399,7 @@ def html_pcz(nov: str) -> str:
     aviso_otras = (f"<div class='tj-aviso'>⚠️ también asociada a LG fila {', '.join(map(str, otras))}</div>"
                    if otras else "")
     return (f"<div class='tj tj-pcz'><div class='tj-num'>N° {nov} · {a.formatear_fecha(fecha_por_id.get(nov))}"
+            f"{' · ' + a.formatear_hora(hora_por_id.get(nov)) if a.formatear_hora(hora_por_id.get(nov)) else ''}"
             f"</div>{a.resaltar(desc_por_id.get(nov, '(no está en el archivo de PCZ)'), set())}{aviso_otras}</div>")
 
 
@@ -444,7 +442,7 @@ with st.container(border=True):
         "" if pd.isna(fila["hora_original"]) else str(fila["hora_original"]))
     h1, h2 = st.columns([4, 1], vertical_alignment="center")
     h1.subheader(f"LG fila {pos + 1}", anchor=False)
-    h1.caption(f"Página {fila['pagina'] or '—'} · {a.formatear_fecha(fila['fecha'])} · {hora or 'sin hora'}")
+    h1.caption(f"{a.formatear_fecha(fila['fecha'])} · {hora or 'sin hora'}")
     h2.markdown(f"<div style='text-align:right'>{ESTADO_ICONO[guardada['estado']]}</div>", unsafe_allow_html=True)
     en_paso_1 = b["etapa"] == "avisos"
     st.markdown(
@@ -601,7 +599,8 @@ if b["etapa"] == "pcz":
                 clave = f"{P}sel_{ver}_{pos}_{cand['fila_pcz']}"
                 c1.checkbox(f"\\[{k}\\] N° {nov}", value=elegida, key=clave, on_change=tildar,
                             args=("novedades", nov, clave))
-                c1.caption(f"Puntaje **{cand['puntaje']}**")
+                hora_cand = a.formatear_hora(cand["hora"])
+                c1.caption(f"Puntaje **{cand['puntaje']}**" + (f" · 🕒 {hora_cand}" if hora_cand else ""))
                 marcas = []
                 if etiqueta:
                     marcas.append(f"<span style='background:#E8B400;color:#1D2A33;padding:1px 6px;border-radius:4px;"

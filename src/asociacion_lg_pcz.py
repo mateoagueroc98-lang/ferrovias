@@ -16,16 +16,16 @@ import pandas as pd
 # Nombre canónico -> función que reconoce el encabezado ya normalizado
 # (sin tildes, minúsculas, solo letras y números).
 COLUMNAS_LG = {
-    "Página": lambda c: c in ("pagina", "pag"),
     "Fecha": lambda c: c == "fecha",
-    "Hora": lambda c: c == "hora",
     "Transcripción": lambda c: c == "transcripcion",
+    "Hora": lambda c: c.startswith("hora"),
 }
 COLUMNAS_PCZ = {
-    "Descripción": lambda c: c == "descripcion",
     "Fecha": lambda c: c == "fecha",
+    "Descripción": lambda c: c == "descripcion",
     # "N° Novedad", "Nº Novedad", "N Novedad", "Nro. Novedad", "Número de novedad"...
     "N° Novedad": lambda c: re.fullmatch(r"(n|no|nro|num|numero)?(de)?novedad", c) is not None,
+    "Hora": lambda c: c.startswith("hora"),
 }
 
 ESTADOS = {"asociada": "Asociada", "ninguna": "Ninguna", "pendiente": "Pendiente"}
@@ -221,8 +221,11 @@ def puntos_hora(diferencia: int) -> int:
     return 0
 
 
-def similitud(texto_lg: str, horas_lg: list[int], texto_pcz: str) -> dict:
-    """Puntaje explicable entre una fila de LG y una descripción de PCZ."""
+def similitud(texto_lg: str, horas_lg: list[int], texto_pcz: str, horas_pcz: list[int] = ()) -> dict:
+    """Puntaje explicable entre una fila de LG y una descripción de PCZ.
+
+    horas_lg / horas_pcz: horas de las columnas Hora (las escritas en los textos se suman solas).
+    """
     claves_lg = {c for _, _, c in tokens(texto_lg)}
     claves_pcz = {c for _, _, c in tokens(texto_pcz)}
     comunes = claves_lg & claves_pcz
@@ -231,7 +234,7 @@ def similitud(texto_lg: str, horas_lg: list[int], texto_pcz: str) -> dict:
     puntaje = sum(PUNTOS_NUMERO if len(n.replace("/", "")) >= 2 else PUNTOS_NUMERO_CHICO for n in numeros)
     puntaje += PUNTOS_PALABRA * len(palabras)
 
-    horas_pcz = [h for _, _, h in horas_en_texto(texto_pcz)]
+    horas_pcz = list(horas_pcz) + [h for _, _, h in horas_en_texto(texto_pcz)]
     dif = None
     if horas_lg and horas_pcz:
         # Diferencia circular (23:50 y 00:10 están a 20 minutos)
@@ -289,13 +292,13 @@ def avisos(transcripcion) -> list[str]:
 
 
 # Columnas que pueden no estar en el archivo de LG
-OPCIONALES_LG = ("Página", "Hora")
+OPCIONALES_LG = ("Hora",)
 
 
 def preparar_lg(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
     """Tabla de trabajo de LG: una fila por párrafo, con fecha y hora ya normalizadas.
 
-    mapa: {nombre canónico: columna del archivo}. Página y Hora son opcionales.
+    mapa: {nombre canónico: columna del archivo}. Hora es opcional.
     """
     vacia = pd.Series([None] * len(df), index=df.index, dtype=object)
     pagina = df[mapa["Página"]] if "Página" in mapa else vacia
@@ -313,12 +316,12 @@ def preparar_lg(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
     return t.reset_index(drop=True)
 
 
-# Columna que puede no estar en el archivo de PCZ (si falta, se usa el número de fila del Excel)
-OPCIONALES_PCZ = ("N° Novedad",)
+# Columnas que pueden no estar en el archivo de PCZ (sin N° Novedad se usa el número de fila del Excel)
+OPCIONALES_PCZ = ("N° Novedad", "Hora")
 
 
 def preparar_pcz(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
-    """Tabla de trabajo de PCZ: id, descripción y fecha normalizada.
+    """Tabla de trabajo de PCZ: id, descripción, fecha y hora normalizadas.
 
     Sin columna "N° Novedad", el id de cada novedad es su número de fila en el Excel.
     """
@@ -326,11 +329,13 @@ def preparar_pcz(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
         ids = df[mapa["N° Novedad"]].map(id_novedad)
     else:
         ids = pd.Series([str(i + 2) for i in range(len(df))], index=df.index)
+    hora = df[mapa["Hora"]] if "Hora" in mapa else pd.Series([None] * len(df), index=df.index)
     t = pd.DataFrame({
         "id": ids,
         "descripcion": df[mapa["Descripción"]].map(lambda v: "" if pd.isna(v) else str(v).strip()),
         "fecha_original": df[mapa["Fecha"]],
         "fecha": df[mapa["Fecha"]].map(parsear_fecha),
+        "hora": pd.Series([parsear_hora(v) for v in hora], index=df.index, dtype=object),
     })
     return t.reset_index(drop=True)
 
@@ -372,7 +377,9 @@ def puntuar(fila_lg: pd.Series, sel: pd.DataFrame) -> pd.DataFrame:
     sel = sel.copy()
     horas_lg = [h for h in [fila_lg["hora"]] if h is not None and not pd.isna(h)]
     horas_lg += [h for _, _, h in horas_en_texto(fila_lg["texto"])]
-    resultados = [similitud(fila_lg["texto"], horas_lg, d) for d in sel["descripcion"]]
+    horas_pcz = sel["hora"] if "hora" in sel else pd.Series([None] * len(sel), index=sel.index)
+    resultados = [similitud(fila_lg["texto"], horas_lg, d, [h] if h is not None and not pd.isna(h) else [])
+                  for d, h in zip(sel["descripcion"], horas_pcz)]
     sel["puntaje"] = [r["puntaje"] for r in resultados]
     sel["detalle"] = [r["detalle"] for r in resultados]
     sel["comunes"] = [r["comunes"] for r in resultados]

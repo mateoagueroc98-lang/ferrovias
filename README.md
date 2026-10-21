@@ -51,17 +51,18 @@ Se abre el navegador. Subí los archivos, armá las coincidencias, elegí las co
 Sirve para asociar cada fila del **Libro de Guardia (LG)** con la(s) novedad(es) del **PCZ** que le
 corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: no usa IA ni internet.
 
-**Archivos que necesita** (las columnas pueden llamarse como sea):
-- **LG**: una columna de Fecha y una de Transcripción — cada fila es un párrafo; cada renglón de la
-  transcripción es un aviso.
-- **PCZ**: una columna de Fecha y una de Descripción.
-- Al cargar elegís solo esas dos columnas en cada archivo. La app busca sola, por el nombre, la
-  **Hora** y la **Página** de LG (opcionales) y el **N° Novedad** de PCZ; si no hay N° Novedad,
-  cada novedad se identifica con su número de fila del Excel.
+**Archivos que necesita** (las columnas pueden llamarse como sea: al cargar elegís cuál es cada dato):
+- **LG**: Fecha y Transcripción (cada fila es un párrafo; cada renglón es un aviso) y, si hay, Hora.
+- **PCZ**: Fecha, Descripción, N° Novedad y, si hay, Hora.
+- **N° Novedad** es lo que identifica cada novedad y lo que se escribe en la hoja `LG_asociado`: si un
+  párrafo del LG queda asociado a varias novedades, sus N° se juntan en la misma celda separados por
+  `;`. Si el archivo no tiene esa columna, se puede usar el número de fila del Excel.
+- **Hora** (LG y PCZ, opcional): suma puntos a las novedades con hora cercana a la del aviso, además
+  de las horas escritas dentro de los textos.
 
 **Pasos**
-1. **Carga**: subí los dos Excel y, debajo de cada uno, elegí la columna de la fecha y la del texto
-   (si se llaman como siempre, ya vienen elegidas). La vista previa muestra cómo entiende la app cada fecha. Las
+1. **Carga**: subí los dos Excel y, debajo de cada uno, elegí qué columna es cada dato (si se llaman
+   como siempre, ya vienen elegidas). La vista previa muestra cómo entiende la app cada fecha. Las
    filas con fecha que no se entiende se listan (no se descartan).
 2. **Asociación**: la app recorre LG fila por fila. Arriba están Anterior / Siguiente y el progreso.
    La fila se ve como una tabla: a la izquierda los avisos del Libro de Guardia y a la derecha, en la
