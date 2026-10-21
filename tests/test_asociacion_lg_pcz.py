@@ -245,3 +245,9 @@ def test_filas_de_tabla_incluye_avisos_sin_asociar_en_orden():
         {"avisos": [3], "novedades": []},
     ]
     assert a.filas_de_tabla([], 0) == []
+
+
+def test_preparar_pcz_sin_n_novedad_usa_fila_del_excel():
+    df = pd.DataFrame({"Detalle": ["a", "b"], "Día": ["04/03/2025", "05/03/2025"]})
+    pcz = a.preparar_pcz(df, {"Descripción": "Detalle", "Fecha": "Día"})
+    assert list(pcz["id"]) == ["2", "3"]

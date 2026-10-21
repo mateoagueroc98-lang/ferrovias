@@ -38,52 +38,62 @@ if msg := ss.pop(P + "msg", None):
     getattr(st, msg[0])(msg[1])
 
 # ===================================================================== 1. Carga
-NO_TIENE = "— (no tiene) —"
-ORDEN = ["Fecha", "Transcripción", "Descripción", "N° Novedad", "Hora", "Página"]
 ARCHIVOS = [
-    # clave, título, columnas que hay que elegir, ayuda por columna
+    # clave, título, columnas que elige el usuario (con su ayuda), columnas que se buscan solas
     ("lg", "Libro de Guardia (LG)", a.COLUMNAS_LG, {
         "Fecha": "Se usa para buscar las novedades de PCZ del mismo día.",
         "Transcripción": "Texto del libro: cada renglón es un aviso.",
-        "Hora": "Opcional: ayuda a ordenar los candidatos por cercanía horaria.",
-        "Página": "Opcional: solo se muestra como referencia.",
     }),
     ("pcz", "Novedades PCZ", a.COLUMNAS_PCZ, {
         "Fecha": "Se compara con la fecha de LG.",
         "Descripción": "Texto de la novedad: se compara con los avisos de LG.",
-        "N° Novedad": "Número que identifica cada novedad.",
     }),
 ]
+# Para qué sirve cada columna que la app busca sola por su nombre
+AUTOMATICAS = {
+    "Hora": "ordenar candidatos por cercanía horaria",
+    "Página": "referencia",
+    "N° Novedad": "identificar cada novedad",
+}
 
 
-def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict, firma: str) -> dict:
-    """Desplegables para indicar qué columna del archivo es cada dato.
+def resolver_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict, firma: str,
+                      mostrar: bool) -> dict:
+    """{dato: columna del archivo}.
 
-    Arranca con lo que reconoce por nombre; la elección queda guardada (por archivo) para
-    los otros pasos.
+    Fecha y texto los elige el usuario (en el paso 1, con desplegables que arrancan con lo que
+    se reconoce por nombre). Hora, Página y N° Novedad se buscan solas por nombre.
     """
+    sugeridas = a.mapear_columnas(df, esperadas)[0]
     guardado = ss.get(P + "mapa_" + clave, {})
-    if guardado.get("_firma") != firma:  # archivo nuevo: sugerir por nombre
-        guardado = {"_firma": firma, **a.mapear_columnas(df, esperadas)[0]}
-    columnas = list(df.columns)
+    if guardado.get("_firma") != firma:  # archivo nuevo: arrancar con lo reconocido por nombre
+        guardado = {"_firma": firma, **{c: sugeridas[c] for c in ayudas if c in sugeridas}}
     mapa = {"_firma": firma}
-    cols = st.columns(2)
-    # Primero los datos obligatorios, después los opcionales
-    orden = sorted(esperadas, key=lambda c: (clave == "lg" and c in a.OPCIONALES_LG,
-                                             ORDEN.index(c) if c in ORDEN else 99))
-    for k, canon in enumerate(orden):
-        opcional = canon in a.OPCIONALES_LG and clave == "lg"
-        opciones = ([NO_TIENE] if opcional else []) + columnas
-        actual = guardado.get(canon)
-        elegida = cols[k % 2].selectbox(
-            canon + (" (opcional)" if opcional else ""), opciones,
-            index=opciones.index(actual) if actual in opciones else (0 if opcional else None),
-            placeholder="Elegí la columna", help=ayudas.get(canon), key=f"{P}col_{clave}_{canon}_{firma}",
-        )
-        if elegida is not None and elegida != NO_TIENE:
-            mapa[canon] = elegida
+    if mostrar:
+        columnas = list(df.columns)
+        cols = st.columns(2)
+        for k, canon in enumerate(ayudas):
+            actual = guardado.get(canon)
+            elegida = cols[k].selectbox(
+                canon, columnas, index=columnas.index(actual) if actual in columnas else None,
+                placeholder="Elegí la columna", help=ayudas[canon], key=f"{P}col_{clave}_{canon}_{firma}",
+            )
+            if elegida is not None:
+                mapa[canon] = elegida
+    else:
+        mapa.update({c: guardado[c] for c in ayudas if c in guardado})
     ss[P + "mapa_" + clave] = mapa
-    return mapa
+
+    # Las automáticas, salvo que coincidan con una columna ya elegida
+    elegidas = {v for k, v in mapa.items() if k != "_firma"}
+    automaticas = {c: v for c, v in sugeridas.items() if c not in ayudas and v not in elegidas}
+    if mostrar:
+        detectadas = [f"{c} → «{automaticas[c]}» ({uso})" for c, uso in AUTOMATICAS.items() if c in automaticas]
+        if detectadas:
+            st.caption("Detectadas solas: " + " · ".join(detectadas))
+        if "N° Novedad" in esperadas and "N° Novedad" not in automaticas:
+            st.caption("No hay columna de N° Novedad: cada novedad se identifica con su número de fila del Excel.")
+    return {**{k: v for k, v in mapa.items() if k != "_firma"}, **automaticas}
 
 
 def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, mostrar: bool):
@@ -109,26 +119,21 @@ def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, mostrar: boo
         return None
     firma = a.huella(arch["bytes"])[:12]
     if mostrar:
-        st.caption("Indicá qué columna del archivo corresponde a cada dato:")
-        mapa = elegir_columnas(clave, df, esperadas, ayudas, firma)
-    else:
-        mapa = ss.get(P + "mapa_" + clave, {})
-        if mapa.get("_firma") != firma:
-            mapa = {"_firma": firma, **a.mapear_columnas(df, esperadas)[0]}
-    mapa = {k: v for k, v in mapa.items() if k != "_firma"}
+        st.caption("Elegí la columna de la fecha y la del texto:")
+    mapa = resolver_columnas(clave, df, esperadas, ayudas, firma, mostrar)
 
-    opcionales = a.OPCIONALES_LG if clave == "lg" else ()
-    if faltan := [c for c in ORDEN if c in esperadas and c not in mapa and c not in opcionales]:
+    if faltan := [c for c in ayudas if c not in mapa]:
         if mostrar:
             st.warning("Falta elegir: " + ", ".join(f"**{c}**" for c in faltan) + ".")
         return None
-    if repetidas := sorted({c for c in mapa.values() if list(mapa.values()).count(c) > 1}):
-        st.error("Elegiste la misma columna para dos datos distintos: " + ", ".join(f"«{c}»" for c in repetidas))
+    if mapa[list(ayudas)[0]] == mapa[list(ayudas)[1]]:
+        st.error("Elegiste la misma columna para la fecha y para el texto.")
         return None
     if mostrar:
-        st.caption("Así se ven las primeras filas con esas columnas:")
-        vista = df[list(mapa.values())].head(3).set_axis(list(mapa), axis=1)
-        vista.insert(list(mapa).index("Fecha") + 1, "Fecha (cómo la entiende la app)",
+        st.caption("Así se ven las primeras filas:")
+        texto = list(ayudas)[1]
+        vista = df[[mapa["Fecha"], mapa[texto]]].head(3).set_axis(["Fecha", texto], axis=1)
+        vista.insert(1, "Fecha (cómo la entiende la app)",
                      vista["Fecha"].map(lambda v: a.formatear_fecha(a.parsear_fecha(v)) if a.parsear_fecha(v)
                                         else "⚠️ no se entiende"))
         st.dataframe(vista.astype(str), hide_index=True, use_container_width=True)
@@ -137,7 +142,7 @@ def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, mostrar: boo
 
 if paso == PASOS[0]:
     st.caption(
-        "Subí los dos Excel y elegí qué columna es cada dato. Los originales **no se modifican**: "
+        "Subí los dos Excel y elegí en cada uno la columna de la fecha y la del texto. Los originales **no se modifican**: "
         "la app trabaja sobre una copia y el resultado se descarga en un Excel nuevo."
     )
     columnas_pantalla = st.columns(2)

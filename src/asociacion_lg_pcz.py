@@ -308,10 +308,21 @@ def preparar_lg(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
     return t.reset_index(drop=True)
 
 
+# Columna que puede no estar en el archivo de PCZ (si falta, se usa el número de fila del Excel)
+OPCIONALES_PCZ = ("N° Novedad",)
+
+
 def preparar_pcz(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
-    """Tabla de trabajo de PCZ: id, descripción y fecha normalizada."""
+    """Tabla de trabajo de PCZ: id, descripción y fecha normalizada.
+
+    Sin columna "N° Novedad", el id de cada novedad es su número de fila en el Excel.
+    """
+    if "N° Novedad" in mapa:
+        ids = df[mapa["N° Novedad"]].map(id_novedad)
+    else:
+        ids = pd.Series([str(i + 2) for i in range(len(df))], index=df.index)
     t = pd.DataFrame({
-        "id": df[mapa["N° Novedad"]].map(id_novedad),
+        "id": ids,
         "descripcion": df[mapa["Descripción"]].map(lambda v: "" if pd.isna(v) else str(v).strip()),
         "fecha_original": df[mapa["Fecha"]],
         "fecha": df[mapa["Fecha"]].map(parsear_fecha),
