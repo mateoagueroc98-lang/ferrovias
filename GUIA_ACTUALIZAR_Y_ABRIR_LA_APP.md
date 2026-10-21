@@ -16,7 +16,7 @@ Todo se hace en la app **Terminal** (`Cmd + Espacio`, escribir `Terminal`, Enter
 Copiar y pegar de a una línea:
 
 ```bash
-cd ~/Documents/ferrovias
+cd ~/ferrovias
 git checkout main
 git pull
 source .venv/bin/activate
@@ -27,7 +27,7 @@ Qué hace cada línea:
 
 | Comando | Para qué sirve |
 |---|---|
-| `cd ~/Documents/ferrovias` | Entra a la carpeta del proyecto. La línea tiene que terminar en `ferrovias %`. |
+| `cd ~/ferrovias` | Entra a la carpeta del proyecto (`/Users/mateoaguero/ferrovias`). La línea tiene que terminar en `ferrovias %`. |
 | `git checkout main` | Se asegura de estar en `main`, la versión estable. |
 | `git pull` | Trae de GitHub los últimos cambios. |
 | `source .venv/bin/activate` | Activa el Python del proyecto. La línea empieza con `(.venv)`. |
@@ -55,7 +55,7 @@ Cuando una sesión de Claude Code está trabajando en un módulo, sus cambios qu
 Para probarlos antes:
 
 ```bash
-cd ~/Documents/ferrovias
+cd ~/ferrovias
 git fetch
 git checkout NOMBRE-DE-LA-RAMA
 git pull
@@ -82,7 +82,7 @@ app). Ojo: lo que no hayas descargado en **3. Exportar** se pierde.
 3. En la Terminal:
 
    ```bash
-   cd ~/Documents
+   cd ~
    git clone https://github.com/mateoagueroc98-lang/ferrovias.git
    cd ferrovias
    python3.13 -m venv .venv
