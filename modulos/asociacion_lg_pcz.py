@@ -310,9 +310,17 @@ def volver_a_avisos():
 
 def siguiente_fila():
     pos = trabajo["posicion"]
-    if pos == n - 1:
-        ss[P + "msg"] = ("success", "Llegaste a la última fila. Si terminaste, pasá a **3. Exportar**.")
-    mover(pos + 1)
+    if pos < n - 1:
+        mover(pos + 1)
+        return
+    # Última fila: si no queda nada sin revisar, directo a exportar
+    quedan = a.progreso(trabajo, n_avisos_por_fila)["pendientes"]
+    if quedan:
+        ss[P + "msg"] = ("info", f"Llegaste a la última fila. Quedan {quedan} aviso(s) sin revisar en otras "
+                                 "filas; si igual querés terminar, tocá «📥 Exportar».")
+        ss[P + "ver"] += 1
+    else:
+        ir_a_paso(PASOS[2])
 
 
 def seguir_si_completa(mensaje: str):
@@ -431,10 +439,12 @@ nav[0].button("⬅️ Anterior", on_click=mover, args=(pos - 1,), disabled=pos =
 with nav[1]:
     st.markdown(
         f"<div style='text-align:center'><b>Fila {pos + 1} de {n}</b> &nbsp;·&nbsp; Avisos: ✅ {p['asociados']} "
-        f"asociados &nbsp;·&nbsp; 🗑️ {p['descartados']} descartados &nbsp;·&nbsp; ⏳ {p['pendientes']} "
-        f"pendientes</div>", unsafe_allow_html=True)
+        f"asociados &nbsp;·&nbsp; 🗑️ {p['descartados']} descartados</div>", unsafe_allow_html=True)
     st.progress((p["avisos"] - p["pendientes"]) / p["avisos"] if p["avisos"] else 1.0)
-nav[2].button("➡️ Siguiente", on_click=mover, args=(pos + 1,), disabled=pos == n - 1, use_container_width=True)
+if pos < n - 1:
+    nav[2].button("➡️ Siguiente", on_click=mover, args=(pos + 1,), use_container_width=True)
+else:
+    nav[2].button("📥 Exportar", type="primary", on_click=ir_a_paso, args=(PASOS[2],), use_container_width=True)
 
 # --------------------------------------------------------------- fila de LG
 with st.container(border=True):
@@ -641,16 +651,6 @@ if b["etapa"] == "pcz":
     if len(sin_fecha):
         with st.expander(f"Novedades de PCZ sin fecha reconocible ({len(sin_fecha)})"):
             mostrar(sin_fecha, dibujadas + 1, "SIN FECHA", "sin_fecha")
-
-with st.expander("Lista de todas las filas de LG"):
-    st.dataframe(pd.DataFrame({
-        "Fila": range(1, n + 1),
-        "Fecha": lg["fecha"].map(a.formatear_fecha),
-        "Pendientes": [len(a.pendientes_de_fila(trabajo["filas"][str(i)], n_avisos_por_fila[i])) for i in range(n)],
-        "Asociaciones": [len(trabajo["filas"][str(i)]["grupos"]) for i in range(n)],
-        "Descartados": [len(trabajo["filas"][str(i)]["descartados"]) for i in range(n)],
-        "Transcripción": lg["texto"].str.slice(0, 120),
-    }), hide_index=True, use_container_width=True)
 
 # Atajos de teclado: se engancha un único listener en la página (se reemplaza en cada recarga)
 # y solo actúa si los botones de esta pantalla están visibles.
