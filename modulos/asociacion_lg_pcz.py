@@ -373,7 +373,8 @@ def proxima_pendiente():
 
 st.html("""<style>
 [class*="st-key-tarjeta_"] { cursor: pointer; }
-[class*="st-key-tarjeta_"]:has(input:checked) { background: rgba(255, 75, 75, 0.10); }
+[class*="st-key-tarjeta_"]:has(input:checked) { background: rgba(27, 74, 122, 0.10); border-color: #1B4A7A; }
+mark { background: #FFE27A; color: inherit; padding: 0 .1em; border-radius: 2px; }
 </style>""")
 
 pos = sesion["posicion"]
@@ -425,7 +426,7 @@ with st.container(border=True):
                 clave = f"{P}aviso_{ver}_{pos}_{i}"
                 c1.checkbox(f"\\[{i + 1}\\] Aviso {i + 1}", value=i in b["avisos"], key=clave,
                             on_change=tildar, args=("avisos", i, clave))
-                marca = ("<span style='background:#16a34a;color:#fff;padding:1px 6px;border-radius:4px'>"
+                marca = ("<span style='background:#2F7D4A;color:#fff;padding:1px 6px;border-radius:4px'>"
                          f"✔ asociado a N° {', '.join(novs)}</span><br>") if novs else ""
                 c2.markdown(marca + f"<span style='font-size:1.05rem'>{a.resaltar(aviso, set())}</span>",
                             unsafe_allow_html=True)
@@ -542,13 +543,13 @@ if b["etapa"] == "pcz":
                 c1.caption(f"Puntaje **{cand['puntaje']}**")
                 marcas = []
                 if etiqueta:
-                    marcas.append(f"<span style='background:#f59e0b;color:#000;padding:1px 6px;border-radius:4px;"
+                    marcas.append(f"<span style='background:#E8B400;color:#1D2A33;padding:1px 6px;border-radius:4px;"
                                   f"font-weight:600'>{etiqueta} · {a.formatear_fecha(cand['fecha'])}</span>")
                 if otras:
-                    marcas.append(f"<span style='background:#3b82f6;color:#fff;padding:1px 6px;border-radius:4px'>"
+                    marcas.append(f"<span style='background:#1B4A7A;color:#fff;padding:1px 6px;border-radius:4px'>"
                                   f"🔗 ya asociada a LG fila {', '.join(map(str, otras))}</span>")
                 if nov in en_esta_fila:
-                    marcas.append("<span style='background:#16a34a;color:#fff;padding:1px 6px;border-radius:4px'>"
+                    marcas.append("<span style='background:#2F7D4A;color:#fff;padding:1px 6px;border-radius:4px'>"
                                   "ya asociada en esta fila (aviso "
                                   + ", ".join(str(x + 1) for x in en_esta_fila[nov]) + ")</span>")
                 c2.markdown(

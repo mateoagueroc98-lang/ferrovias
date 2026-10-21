@@ -42,6 +42,10 @@ Resumen. Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/eje
 - **Agregar un módulo**: crear `modulos/<nombre>.py` y `src/<nombre>.py`, y sumar un
   `st.Page(...)` en `app.py`. No llamar `st.set_page_config` dentro de los módulos.
 - Textos de la interfaz, comentarios y mensajes de commit **en español**.
+- **Apariencia**: colores, fuente (Overpass, incluida en `static/fuentes/`) y menú lateral se definen en
+  `.streamlit/config.toml` y `app.py`. Paleta: azul cartel `#1B4A7A` (principal), fondo andén
+  `#F4F6F5`, texto `#1D2A33`; estados con colores de señal: verde `#2F7D4A`, amarillo `#C98A00`/
+  `#FFE27A` (resaltado), rojo `#B3261E`. Para cambios visuales usar la skill `frontend-design`.
 - Nunca subir datos ni secretos: `.xlsx`, `.csv` y `.env` están en `.gitignore`. La clave de
   Anthropic va en `.env` (`ANTHROPIC_API_KEY`), ver `.env.example`.
 - Dependencias nuevas → `requirements.txt` y avisar al usuario que corra

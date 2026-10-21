@@ -6,7 +6,45 @@
 fileWatcherType = "none"
 # Solo accesible desde esta compu: no pide permiso al firewall ni la ve nadie de la red.
 address = "localhost"
+# Sirve la carpeta static/ (la fuente Overpass va incluida: anda sin internet).
+enableStaticServing = true
 
 [browser]
 # No mandar estadísticas de uso a Streamlit.
 gatherUsageStats = false
+
+# ---------------------------------------------------------------- apariencia
+# Inspirada en la señalética ferroviaria: azul de cartel de estación, fondo de
+# andén y los colores de señal (verde / amarillo / rojo) para los estados.
+[theme]
+base = "light"
+primaryColor = "#1B4A7A"              # azul cartel
+backgroundColor = "#F4F6F5"           # andén
+secondaryBackgroundColor = "#E3E8E6"  # balasto
+textColor = "#1D2A33"                 # acero
+linkColor = "#1B4A7A"
+borderColor = "#C9D1CE"
+showWidgetBorder = true
+greenColor = "#2F7D4A"                # señal verde: asociado / listo
+yellowColor = "#C98A00"               # señal amarilla: pendiente / atención
+redColor = "#B3261E"                  # señal roja: error / ninguna
+blueColor = "#1B4A7A"
+font = "Overpass, sans-serif"
+headingFont = "Overpass, sans-serif"
+headingFontWeights = [800, 700, 700, 600, 600, 600]
+baseRadius = "0.3rem"
+buttonRadius = "0.3rem"
+dataframeHeaderBackgroundColor = "#E3E8E6"
+
+[[theme.fontFaces]]
+family = "Overpass"
+url = "app/static/fuentes/Overpass-Variable.ttf"
+weight = "100 900"
+
+# Menú lateral: el "cartel de estación".
+[theme.sidebar]
+backgroundColor = "#1B4A7A"
+secondaryBackgroundColor = "#24578C"
+textColor = "#FFFFFF"
+primaryColor = "#FFFFFF"
+borderColor = "#3A6A9A"
