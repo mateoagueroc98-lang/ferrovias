@@ -51,9 +51,8 @@ ARCHIVOS = [
     ("pcz", "Novedades PCZ", a.COLUMNAS_PCZ, {
         "Fecha": "Se compara con la fecha de LG.",
         "Descripción": "Texto de la novedad: se compara con los avisos de LG.",
-        "N° Novedad": "Identifica cada novedad. Es el valor que se escribe en la hoja LG_asociado: si un "
-                      "párrafo del LG queda asociado a varias novedades, sus N° se juntan en la misma "
-                      "celda separados por «;».",
+        "N° Novedad": "Identifica cada novedad. En la hoja «Asociaciones», si una asociación tiene varias "
+                      "novedades, sus N° se juntan en la misma celda separados por « | ».",
         "Hora": "Opcional. Suma puntos a las novedades con hora cercana a la de LG "
                 "(además de las horas escritas en la descripción).",
     }, {"N° Novedad": FILA_EXCEL, "Hora": SIN_HORA}),
