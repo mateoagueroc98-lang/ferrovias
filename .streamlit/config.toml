@@ -14,37 +14,38 @@ enableStaticServing = true
 gatherUsageStats = false
 
 # ---------------------------------------------------------------- apariencia
-# Inspirada en la señalética ferroviaria: azul de cartel de estación, fondo de
-# andén y los colores de señal (verde / amarillo / rojo) para los estados.
+# Con la marca Ferrovías: el rojo de las franjas del logo como color principal,
+# texto grafito como el logotipo, fondo gris andén y colores de señal
+# (verde / amarillo) para los estados. Los degradados están en app.py.
 [theme]
 base = "light"
-primaryColor = "#1B4A7A"              # azul cartel
-backgroundColor = "#F4F6F5"           # andén
-secondaryBackgroundColor = "#E3E8E6"  # balasto
-textColor = "#1D2A33"                 # acero
-linkColor = "#1B4A7A"
-borderColor = "#C9D1CE"
+primaryColor = "#D41920"              # rojo Ferrovías (un punto más oscuro que #ED1E24, para leer bien texto blanco)
+backgroundColor = "#F4F3F2"           # andén
+secondaryBackgroundColor = "#E8E6E4"  # balasto
+textColor = "#1C1A19"                 # grafito del logotipo
+linkColor = "#B5131A"
+borderColor = "#D3CFCC"
 showWidgetBorder = true
 greenColor = "#2F7D4A"                # señal verde: asociado / listo
 yellowColor = "#C98A00"               # señal amarilla: pendiente / atención
-redColor = "#B3261E"                  # señal roja: error / ninguna
-blueColor = "#1B4A7A"
+redColor = "#B3261E"                  # señal roja: error
+blueColor = "#3B5B78"                 # avisos informativos
 font = "Overpass, sans-serif"
 headingFont = "Overpass, sans-serif"
 headingFontWeights = [800, 700, 700, 600, 600, 600]
 baseRadius = "0.3rem"
 buttonRadius = "0.3rem"
-dataframeHeaderBackgroundColor = "#E3E8E6"
+dataframeHeaderBackgroundColor = "#E8E6E4"
 
 [[theme.fontFaces]]
 family = "Overpass"
 url = "app/static/fuentes/Overpass-Variable.ttf"
 weight = "100 900"
 
-# Menú lateral: el "cartel de estación".
+# Menú lateral rojo (el degradado se agrega en app.py).
 [theme.sidebar]
-backgroundColor = "#1B4A7A"
-secondaryBackgroundColor = "#24578C"
+backgroundColor = "#C4161D"
+secondaryBackgroundColor = "#A8121A"
 textColor = "#FFFFFF"
 primaryColor = "#FFFFFF"
-borderColor = "#3A6A9A"
+borderColor = "#E0575C"

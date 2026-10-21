@@ -1,16 +1,36 @@
 """Punto de entrada: menú con los módulos de la app."""
+import base64
+from pathlib import Path
+
 import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
 
-st.set_page_config(page_title="Ferrovías - Excels", layout="wide")
+st.set_page_config(page_title="Ferrovías - Ing. de Mantenimiento", layout="wide")
 
-# Cartel de estación arriba del menú (colores y fuente en .streamlit/config.toml).
-st.sidebar.html("""
-<div style="border:2px solid #fff;border-radius:6px;padding:.7rem .9rem .6rem;margin:.2rem 0 .4rem">
-  <div style="font-size:1.9rem;font-weight:800;line-height:1;letter-spacing:-.01em">Ferrovías</div>
-  <div style="font-size:.95rem;opacity:.85;margin-top:.35rem">Automatización de Excels</div>
+# Marca arriba del menú: logo de Ferrovías sobre placa blanca (sobre el rojo del menú
+# las franjas del logo no se verían). Colores y fuente en .streamlit/config.toml.
+LOGO = base64.b64encode((Path(__file__).parent / "static" / "marca" / "ferrovias_logo.svg").read_bytes()).decode()
+st.sidebar.html(f"""
+<style>
+/* Menú lateral con degradado del rojo Ferrovías al rojo profundo */
+[data-testid="stSidebar"] {{ background: linear-gradient(180deg, #E31B22 0%, #C4161D 55%, #9E1219 100%); }}
+/* Fondo general apenas degradado (de blanco a gris andén) */
+[data-testid="stAppViewContainer"] {{ background: linear-gradient(180deg, #FFFFFF 0%, #F4F3F2 45%, #ECEAE8 100%); }}
+[data-testid="stHeader"] {{ background: transparent; }}
+/* Botones principales con el mismo degradado */
+[data-testid="stBaseButton-primary"] {{ background: linear-gradient(180deg, #E61D24 0%, #B5131A 100%); border: none; }}
+[data-testid="stBaseButton-primary"]:hover {{ background: linear-gradient(180deg, #C8161D 0%, #95101A 100%); }}
+.marca {{ margin: .2rem 0 .9rem; }}
+.marca-placa {{ background: #FFFFFF; border-radius: 6px; padding: .75rem .9rem;
+               box-shadow: 0 2px 10px rgba(80, 8, 12, .35); }}
+.marca-placa img {{ display: block; width: 100%; height: auto; }}
+.marca-texto {{ color: #FFFFFF; font-size: .95rem; font-weight: 600; line-height: 1.3; margin-top: .6rem; }}
+</style>
+<div class="marca">
+  <div class="marca-placa"><img src="data:image/svg+xml;base64,{LOGO}" alt="Ferrovías"></div>
+  <div class="marca-texto">Herramienta de Ing. de Mantenimiento</div>
 </div>
 """)
 

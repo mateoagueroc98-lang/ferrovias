@@ -368,14 +368,14 @@ def quitar_grupo(i: int):
 st.html("""<style>
 /* Tarjetas que se eligen con un clic (avisos en el paso 1, novedades en el paso 2) */
 [class*="st-key-tarjeta_"] { cursor: pointer; }
-[class*="st-key-tarjeta_"]:has(input:checked) { background: rgba(27, 74, 122, 0.10); border-color: #1B4A7A; }
+[class*="st-key-tarjeta_"]:has(input:checked) { background: rgba(212, 25, 32, 0.08); border-color: #D41920; }
 mark { background: #FFE27A; color: inherit; padding: 0 .1em; border-radius: 2px; }
 /* Tarjetas fijas de la tabla LG ↔ PCZ */
 .tj { border: 1px solid rgba(128, 128, 128, 0.35); border-radius: 0.5rem; padding: 0.6rem 0.8rem;
       margin-bottom: 0.5rem; line-height: 1.45; }
-.tj-lg, [class*="st-key-tarjeta_a_"] { border-left: 4px solid #1D2A33 !important; }
+.tj-lg, [class*="st-key-tarjeta_a_"] { border-left: 4px solid #1C1A19 !important; }
 .tj-lg { font-size: 0.9rem; }
-.tj-pcz { border-left: 4px solid #1B4A7A; background: rgba(27, 74, 122, 0.07); }
+.tj-pcz { border-left: 4px solid #D41920; background: linear-gradient(90deg, rgba(212, 25, 32, 0.08), rgba(212, 25, 32, 0.02)); }
 .tj-vacia { border-style: dashed; opacity: 0.55; text-align: center; font-size: 0.9rem; }
 .tj-num { font-size: 0.78rem; font-weight: 600; opacity: 0.7; margin-bottom: 0.15rem; }
 .tj-aviso { font-size: 0.8rem; color: #8A5E00; margin-top: 0.25rem; }
@@ -603,10 +603,10 @@ if b["etapa"] == "pcz":
                 c1.caption(f"Puntaje **{cand['puntaje']}**" + (f" · 🕒 {hora_cand}" if hora_cand else ""))
                 marcas = []
                 if etiqueta:
-                    marcas.append(f"<span style='background:#E8B400;color:#1D2A33;padding:1px 6px;border-radius:4px;"
+                    marcas.append(f"<span style='background:#E8B400;color:#1C1A19;padding:1px 6px;border-radius:4px;"
                                   f"font-weight:600'>{etiqueta} · {a.formatear_fecha(cand['fecha'])}</span>")
                 if otras:
-                    marcas.append(f"<span style='background:#1B4A7A;color:#fff;padding:1px 6px;border-radius:4px'>"
+                    marcas.append(f"<span style='background:#4A4543;color:#fff;padding:1px 6px;border-radius:4px'>"
                                   f"🔗 ya asociada a LG fila {', '.join(map(str, otras))}</span>")
                 if nov in en_esta_fila:
                     marcas.append("<span style='background:#2F7D4A;color:#fff;padding:1px 6px;border-radius:4px'>"
