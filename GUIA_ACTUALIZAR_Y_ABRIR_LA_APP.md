@@ -3,7 +3,7 @@
 Pasos para traer los últimos cambios de GitHub y usar la app en cada computadora.
 
 - [Casa – Mac](#casa--mac)
-- [Trabajo – Windows](#trabajo--windows) *(pendiente)*
+- [Trabajo – Windows](#trabajo--windows) *(sin Git: se actualiza con ZIP)*
 
 ---
 
@@ -100,7 +100,69 @@ app). Ojo: lo que no hayas descargado en **3. Exportar** se pierde.
 
 ## Trabajo – Windows
 
-*Pendiente: se completa cuando se configure la computadora del trabajo.*
+En esta compu **no hay Git**: el proyecto se actualiza bajando un ZIP de GitHub y pegándolo
+encima de la carpeta. La carpeta del proyecto está en la unidad de red:
+
+```
+Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias
+```
+
+### Actualizar (cuando hay cambios nuevos en GitHub)
+
+1. Si la app está abierta, cerrarla con `Ctrl + C` en la ventana negra.
+2. Entrar a https://github.com/mateoagueroc98-lang/ferrovias, botón verde **Code** →
+   **Download ZIP**. (Baja la versión estable, `main`.)
+3. En **Descargas**, clic derecho en `ferrovias-main.zip` → **Extraer todo** → **Extraer**.
+4. Entrar a la carpeta extraída `ferrovias-main` hasta ver `app.py` (a veces hay una carpeta
+   `ferrovias-main` adentro de otra). Seleccionar todo (`Ctrl + A`) y copiar (`Ctrl + C`).
+5. Ir a la carpeta `ferrovias` de `Y:`, pegar (`Ctrl + V`) y elegir
+   **Reemplazar los archivos en el destino**.
+
+> **Ojo:** pegar **encima**, no borrar la carpeta `ferrovias` vieja. El ZIP trae la carpeta
+> `datos\` **vacía** (sin tus Excels ni asociaciones guardadas) y trae `.env.example` (el modelo),
+> no tu `.env` con la clave. Si se borra la carpeta, eso se pierde.
+
+Para probar una rama que todavía no está en `main`: en GitHub elegirla en el menú de ramas
+(arriba a la izquierda, dice `main`) **antes** de tocar **Code → Download ZIP**.
+
+### Abrir la app
+
+1. Abrir la carpeta `ferrovias` en el Explorador, hacer clic en la barra de direcciones,
+   escribir `cmd` y Enter. Se abre una ventana negra ya ubicada en la carpeta.
+2. Escribir:
+
+   ```
+   python -m streamlit run app.py --server.headless true
+   ```
+
+3. Abrir **Chrome** en `http://localhost:8501`.
+
+- **No cerrar la ventana negra** mientras se usa la app: corre ahí. Para apagarla: `Ctrl + C`.
+- Si dice que `python` no se reconoce, usar `py` en su lugar: `py -m streamlit run app.py --server.headless true`.
+- Si dice `No module named ...` (falta una librería, por ejemplo después de actualizar):
+
+  ```
+  python -m pip install --user -r requirements.txt
+  ```
+
+  y volver a abrir la app.
+
+### Instalación (solo la primera vez en esta compu)
+
+1. **Python 3.13** desde https://www.python.org/downloads/windows/ — en el instalador tildar
+   *"Add python.exe to PATH"*. (No hace falta Git.)
+2. Bajar el proyecto como en [Actualizar](#actualizar-cuando-hay-cambios-nuevos-en-github)
+   y pegarlo en la carpeta de `Y:`.
+3. Abrir `cmd` en la carpeta (como en *Abrir la app*) e instalar las librerías:
+
+   ```
+   python -m pip install --user -r requirements.txt
+   ```
+
+   El `--user` las instala en el usuario (disco `C:`), sin permisos de administrador y sin
+   crear un `.venv` en la unidad de red, que sería lento.
+4. *(Opcional, para módulos con IA)*: `copy .env.example .env` y `notepad .env` para pegar la
+   clave de Anthropic.
 
 ### Empezar de cero en el módulo Asociación LG ↔ PCZ
 

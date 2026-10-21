@@ -358,17 +358,18 @@ def proxima_pendiente():
 st.html("""<style>
 /* Tarjetas que se eligen con un clic (avisos en el paso 1, novedades en el paso 2) */
 [class*="st-key-tarjeta_"] { cursor: pointer; }
-[class*="st-key-tarjeta_"]:has(input:checked) { background: rgba(255, 75, 75, 0.10); }
+[class*="st-key-tarjeta_"]:has(input:checked) { background: rgba(27, 74, 122, 0.10); border-color: #1B4A7A; }
+mark { background: #FFE27A; color: inherit; padding: 0 .1em; border-radius: 2px; }
 /* Tarjetas fijas de la tabla LG ↔ PCZ */
 .tj { border: 1px solid rgba(128, 128, 128, 0.35); border-radius: 0.5rem; padding: 0.6rem 0.8rem;
       margin-bottom: 0.5rem; line-height: 1.45; }
-.tj-lg, [class*="st-key-tarjeta_a_"] { border-left: 4px solid #ef4444 !important; }
+.tj-lg, [class*="st-key-tarjeta_a_"] { border-left: 4px solid #1D2A33 !important; }
 .tj-lg { font-size: 0.9rem; }
-.tj-pcz { border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.07); }
+.tj-pcz { border-left: 4px solid #1B4A7A; background: rgba(27, 74, 122, 0.07); }
 .tj-vacia { border-style: dashed; opacity: 0.55; text-align: center; font-size: 0.9rem; }
 .tj-num { font-size: 0.78rem; font-weight: 600; opacity: 0.7; margin-bottom: 0.15rem; }
-.tj-aviso { font-size: 0.8rem; color: #f59e0b; margin-top: 0.25rem; }
-.col-titulo { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+.tj-aviso { font-size: 0.8rem; color: #8A5E00; margin-top: 0.25rem; }
+.col-titulo { font-size: 0.85rem; font-weight: 600;
               opacity: 0.55; margin-bottom: 0.3rem; }
 .flecha { text-align: center; font-size: 1.4rem; opacity: 0.45; padding-top: 0.6rem; }
 .pasos { font-size: 0.95rem; margin: 0.2rem 0 0.6rem 0; }
@@ -598,13 +599,13 @@ if b["etapa"] == "pcz":
                 c1.caption(f"Puntaje **{cand['puntaje']}**")
                 marcas = []
                 if etiqueta:
-                    marcas.append(f"<span style='background:#f59e0b;color:#000;padding:1px 6px;border-radius:4px;"
+                    marcas.append(f"<span style='background:#E8B400;color:#1D2A33;padding:1px 6px;border-radius:4px;"
                                   f"font-weight:600'>{etiqueta} · {a.formatear_fecha(cand['fecha'])}</span>")
                 if otras:
-                    marcas.append(f"<span style='background:#3b82f6;color:#fff;padding:1px 6px;border-radius:4px'>"
+                    marcas.append(f"<span style='background:#1B4A7A;color:#fff;padding:1px 6px;border-radius:4px'>"
                                   f"🔗 ya asociada a LG fila {', '.join(map(str, otras))}</span>")
                 if nov in en_esta_fila:
-                    marcas.append("<span style='background:#16a34a;color:#fff;padding:1px 6px;border-radius:4px'>"
+                    marcas.append("<span style='background:#2F7D4A;color:#fff;padding:1px 6px;border-radius:4px'>"
                                   "ya asociada en esta fila (aviso "
                                   + ", ".join(str(x + 1) for x in en_esta_fila[nov]) + ")</span>")
                 c2.markdown(
