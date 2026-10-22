@@ -4,8 +4,10 @@ Uso:  python tests/generar_ejemplos.py
 Crea tests/ejemplos/LG_ejemplo.xlsx y tests/ejemplos/PCZ_ejemplo.xlsx.
 Las fechas vienen en formatos mezclados a propósito (fecha de Excel, número serial,
 texto "DD/MM/AAAA" y "D/M/AA") y hay una fecha inválida para ver la advertencia.
+PCZ trae además una columna Hora (con algunas celdas vacías).
 """
 import datetime as dt
+import re
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -85,9 +87,14 @@ def generar(carpeta: Path = CARPETA) -> tuple[Path, Path]:
 
     wb = Workbook()
     ws = wb.active
-    ws.append(["Descripcion", "Fecha", "Nº Novedad"])
+    ws.append(["Descripcion", "Fecha", "Nº Novedad", "Hora"])
     for n, (desc, fecha) in enumerate(PCZ, start=1001):
-        ws.append([desc, fecha, n])
+        # Hora en columna aparte (la misma que figura en el texto); algunas vacías y en formatos mezclados
+        m = re.search(r"(\d{1,2}):(\d{2})", desc)
+        hora = None
+        if m and n % 4:
+            hora = dt.time(int(m[1]), int(m[2])) if n % 2 else f"{m[1]}:{m[2]}"
+        ws.append([desc, fecha, n, hora])
     for celda in ws["B"][1:]:
         if isinstance(celda.value, dt.datetime):
             celda.number_format = "DD/MM/YYYY"

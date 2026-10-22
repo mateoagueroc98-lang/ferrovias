@@ -31,8 +31,8 @@ descargar con nombre elegido. Las claves se normalizan (101 == 101.0, fechas sin
 
 **Asociación LG ↔ PCZ**: asociar a mano filas del Libro de Guardia con novedades del PCZ. Candidatos
 solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple sin IA.
-El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas LG_asociado, PCZ_completado y
-Resumen. Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
+El progreso vive solo en memoria (no hay sesiones guardadas en disco). Cada aviso se asocia o se descarta. Export con hojas
+Asociaciones (columnas y orden elegidos), LG sin asociar y PCZ sin asociar (columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
 
 ## Reglas
 
@@ -42,10 +42,12 @@ Resumen. Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/eje
 - **Agregar un módulo**: crear `modulos/<nombre>.py` y `src/<nombre>.py`, y sumar un
   `st.Page(...)` en `app.py`. No llamar `st.set_page_config` dentro de los módulos.
 - Textos de la interfaz, comentarios y mensajes de commit **en español**.
-- **Apariencia**: colores, fuente (Overpass, incluida en `static/fuentes/`) y menú lateral se definen en
-  `.streamlit/config.toml` y `app.py`. Paleta: azul cartel `#1B4A7A` (principal), fondo andén
-  `#F4F6F5`, texto `#1D2A33`; estados con colores de señal: verde `#2F7D4A`, amarillo `#C98A00`/
-  `#FFE27A` (resaltado), rojo `#B3261E`. Para cambios visuales usar la skill `frontend-design`.
+- **Apariencia**: colores, fuente (Overpass, incluida en `static/fuentes/`), logo
+  (`static/marca/ferrovias_logo.svg`) y menú lateral se definen en `.streamlit/config.toml` y `app.py`.
+  Paleta de la marca Ferrovías: rojo `#D41920` (principal; el del logo es `#ED1E24`), degradados de
+  `#E31B22` a `#9E1219` (menú y botones principales), fondo andén `#F4F3F2`, texto grafito `#1C1A19`;
+  estados con colores de señal: verde `#2F7D4A`, amarillo `#C98A00`/`#FFE27A` (resaltado), rojo error
+  `#B3261E`. Para cambios visuales usar la skill `frontend-design`.
 - Nunca subir datos ni secretos: `.xlsx`, `.csv` y `.env` están en `.gitignore`. La clave de
   Anthropic va en `.env` (`ANTHROPIC_API_KEY`), ver `.env.example`.
 - Dependencias nuevas → `requirements.txt` y avisar al usuario que corra
