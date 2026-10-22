@@ -201,3 +201,23 @@ def test_excel(ejemplo):
     assert fila[3].value == T(5, 50)
     assert fila[4].alignment.wrap_text and fila[4].value.count("\n") == 3
     assert hoja.cell(3, 4).value is None  # 799 sin hora fin: celda vacía
+
+
+def test_excel_formato_tabla(ejemplo):
+    r = ln.procesar(ejemplo, ["NORMAL"], CONECTORES)
+    hoja = load_workbook(io.BytesIO(ln.exportar_excel(r.tabla, ln.FORMATO_TABLA, "Tabla"))).active
+    assert hoja.title == "Tabla"
+    assert [c.value for c in hoja[1]] == [
+        "Fecha", "Mes", "N° Novedad", "Sistema", "Subsistema", "Parte", "Elemento",
+        "Nombre correcto", "Descripción", "Zona", "VER", "Falla", "Comienzo de falla", "Habilitación"]
+    assert hoja.auto_filter.ref == f"A1:N{len(r.tabla) + 1}"
+    fila = hoja[10]  # 808
+    assert fila[0].value == dt.datetime(2026, 10, 21) and fila[0].number_format == "dd/mm/yyyy"
+    assert fila[2].value == 808
+    assert fila[8].value.startswith("AUX. BOGADO") and fila[8].alignment.wrap_text
+    assert fila[12].value == T(4, 49) and fila[12].number_format == "hh:mm"
+    assert fila[13].value == T(5, 50)
+    # columnas vacías: sin ningún valor, para que «Saltar blancos» no pise las fórmulas
+    for i in (1, 3, 4, 5, 6, 7, 9, 10, 11):
+        assert fila[i].value is None
+    assert hoja.cell(3, 14).value is None  # 799 sin hora fin

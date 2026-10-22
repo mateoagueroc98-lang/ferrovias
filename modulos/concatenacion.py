@@ -128,5 +128,30 @@ sugerido = f"Libro de Novedades {fechas.max():%d-%m-%Y}" if len(fechas) else "Li
 nombre = st.text_input("Nombre del archivo a descargar", value=sugerido)
 # Sacar caracteres que Windows no acepta en nombres de archivo
 nombre = re.sub(r'[\\/:*?"<>|]', "", nombre).strip().removesuffix(".xlsx") or "Libro de Novedades"
-st.download_button(f"Descargar {nombre}.xlsx", ln.exportar_excel(tabla), f"{nombre}.xlsx",
-                   type="primary")
+
+with st.container(border=True):
+    st.markdown("**Tal como viene**")
+    st.caption("Las cinco columnas una al lado de la otra: Nro novedad, Fecha, Hora inicio, "
+               "Hora fin y Detalle.")
+    st.download_button(f"Descargar {nombre}.xlsx", ln.exportar_excel(tabla), f"{nombre}.xlsx",
+                       type="primary", key=P + "descargar")
+
+with st.container(border=True):
+    st.markdown("**Formato de la hoja «Tabla»**")
+    st.caption("Las mismas columnas que la hoja «Tabla», en el mismo orden: Fecha, N° Novedad, "
+               "Descripción, Comienzo de falla (hora inicio) y Habilitación (hora fin) con datos; "
+               "Mes, Sistema, Subsistema, Parte, Elemento, Nombre correcto, Zona, VER y Falla "
+               "vacías. Así copiás todo de una vez.")
+    st.markdown(
+        "Para pegar sin borrar las fórmulas de las columnas vacías:\n"
+        "1. En este Excel, seleccioná las filas con datos (desde la fila 2, sin el encabezado) "
+        "y copialas con **Ctrl+C**.\n"
+        "2. En la hoja «Tabla», hacé clic en la celda de la columna **Fecha** donde va la "
+        "primera novedad.\n"
+        "3. Apretá **Ctrl+Alt+V** (Pegado especial), tildá **Saltar blancos** y tocá **Aceptar**.\n\n"
+        "Las celdas vacías no pisan lo que ya hay en la hoja. Ojo: cuando no hay hora de fin, "
+        "Habilitación también queda vacía y se saltea igual."
+    )
+    st.download_button(f"Descargar {nombre} - Tabla.xlsx",
+                       ln.exportar_excel(tabla, ln.FORMATO_TABLA, "Tabla"),
+                       f"{nombre} - Tabla.xlsx", type="primary", key=P + "descargar_tabla")

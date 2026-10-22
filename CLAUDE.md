@@ -39,7 +39,9 @@ Asociaciones (columnas y orden elegidos), LG sin asociar y PCZ sin asociar (colu
 número de novedad (Nro, Fecha, Hora inicio, Hora fin, Detalle). Hora fin = hora del último renglón cuyo
 `descrip` contiene una palabra clave (palabras completas, en orden, sin tildes/puntuación/conectores;
 «no» y «sin» nunca son conectores). Palabras clave y conectores se editan en pantalla y NO se guardan
-entre usos. CSV inventado en `tests/ejemplos/LibroNovedades_ejemplo.csv`.
+entre usos. Dos descargas: tal como viene (5 columnas) y formato de la hoja «Tabla» del usuario
+(`FORMATO_TABLA`, 14 columnas con vacías en el medio para pegar con «Saltar blancos» sin pisar fórmulas).
+CSV inventado en `tests/ejemplos/LibroNovedades_ejemplo.csv`.
 
 ## Reglas
 

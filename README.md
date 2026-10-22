@@ -133,7 +133,14 @@ renglón de texto; la app junta los renglones del mismo número. Todo corre en t
    NORMALIZADO; «recibe via» tiene que estar junto y en ese orden). Se ignoran mayúsculas, tildes,
    puntuación y los **conectores** (de, el, la…, se editan en el desplegable; «no» y «sin» nunca).
 3. Revisá la vista previa (la última columna muestra qué renglón marcó el fin; no va al Excel), poné
-   el nombre del archivo y descargalo.
+   el nombre del archivo y elegí cómo descargarlo:
+   - **Tal como viene**: las 5 columnas una al lado de la otra.
+   - **Formato de la hoja «Tabla»**: las 14 columnas de la hoja Tabla en su orden (Fecha, Mes,
+     N° Novedad, Sistema, Subsistema, Parte, Elemento, Nombre correcto, Descripción, Zona, VER, Falla,
+     Comienzo de falla, Habilitación), con datos solo en Fecha, N° Novedad, Descripción, Comienzo de
+     falla y Habilitación. Para pegarlo sin borrar las fórmulas: copiá las filas (sin el encabezado),
+     hacé clic en la celda de Fecha de la hoja Tabla, **Ctrl+Alt+V** → tildá **Saltar blancos** →
+     Aceptar. Las celdas vacías no pisan lo que ya había.
 
 El Excel tiene una hoja con: Nro novedad, Fecha, Hora inicio (primer renglón), Hora fin (vacía si
 ningún renglón coincide) y Detalle (todos los renglones, uno por línea, tal cual vienen). Fecha y horas

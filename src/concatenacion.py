@@ -240,28 +240,60 @@ def procesar(contenido: bytes, claves: list[str], conectores: list[str],
 
 
 # ------------------------------------------------------------------ exportación
-def exportar_excel(tabla: pd.DataFrame) -> bytes:
-    """Una hoja con encabezados en negrita, filtros, fecha/hora reales y Detalle con ajustar texto."""
+# Formato de la hoja "Tabla" donde el usuario pega los datos: (encabezado, campo de la tabla).
+# None = columna vacía (en la hoja Tabla ahí hay fórmulas o datos que se cargan a mano).
+FORMATO_TABLA = [
+    ("Fecha", "Fecha"),
+    ("Mes", None),
+    ("N° Novedad", "Nro novedad"),
+    ("Sistema", None),
+    ("Subsistema", None),
+    ("Parte", None),
+    ("Elemento", None),
+    ("Nombre correcto", None),
+    ("Descripción", "Detalle"),
+    ("Zona", None),
+    ("VER", None),
+    ("Falla", None),
+    ("Comienzo de falla", "Hora inicio"),
+    ("Habilitación", "Hora fin"),
+]
+FORMATO_ORIGINAL = [(c, c) for c in COLUMNAS]
+
+_FORMATOS = {"Fecha": "dd/mm/yyyy", "Hora inicio": "hh:mm", "Hora fin": "hh:mm"}
+_ANCHOS = {"Nro novedad": 12, "Fecha": 12, "Hora inicio": 11, "Hora fin": 13, "Detalle": 100}
+
+
+def exportar_excel(tabla: pd.DataFrame, formato: list[tuple[str, str | None]] = FORMATO_ORIGINAL,
+                   hoja: str = "Libro de Novedades") -> bytes:
+    """Una hoja con encabezados en negrita, filtros, fecha/hora reales y Detalle con ajustar texto.
+
+    formato: columnas del Excel en orden, como (encabezado, campo de la tabla o None = vacía).
+    Las columnas vacías quedan sin ningún valor (ni siquiera ""), así Excel las saltea al
+    pegar con «Saltar blancos».
+    """
     wb = Workbook()
     ws = wb.active
-    ws.title = "Libro de Novedades"
-    ws.append(COLUMNAS)
+    ws.title = hoja
+    ws.append([titulo for titulo, _ in formato])
     for c in ws[1]:
         c.font = Font(bold=True)
-    formatos = {"Fecha": "dd/mm/yyyy", "Hora inicio": "hh:mm", "Hora fin": "hh:mm"}
     arriba = Alignment(vertical="top")
     ajustar = Alignment(vertical="top", wrap_text=True)
-    for fila in tabla.itertuples(index=False):
-        valores = [None if pd.isna(v) else v for v in fila]
-        valores[0] = int(valores[0])
-        ws.append(valores)
-        for nombre, celda in zip(COLUMNAS, ws[ws.max_row]):
-            if nombre in formatos:
-                celda.number_format = formatos[nombre]
-            celda.alignment = ajustar if nombre == "Detalle" else arriba
-    for i, ancho in enumerate([12, 12, 11, 11, 100], start=1):
-        ws.column_dimensions[get_column_letter(i)].width = ancho
-    ws.auto_filter.ref = f"A1:E{max(ws.max_row, 1)}"
+    for fila in tabla.to_dict("records"):
+        valores = [None if campo is None or pd.isna(fila[campo]) else fila[campo]
+                   for _, campo in formato]
+        ws.append([int(v) if campo == "Nro novedad" and v is not None else v
+                   for v, (_, campo) in zip(valores, formato)])
+        for (_, campo), celda in zip(formato, ws[ws.max_row]):
+            if campo is None:
+                continue
+            if campo in _FORMATOS:
+                celda.number_format = _FORMATOS[campo]
+            celda.alignment = ajustar if campo == "Detalle" else arriba
+    for i, (titulo, campo) in enumerate(formato, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = _ANCHOS.get(campo, max(len(titulo) + 4, 10))
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(formato))}{max(ws.max_row, 1)}"
     ws.freeze_panes = "A2"
     buffer = io.BytesIO()
     wb.save(buffer)
