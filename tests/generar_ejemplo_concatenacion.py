@@ -1,6 +1,6 @@
-"""Genera un CSV de prueba INVENTADO para el módulo Libro de Novedades.
+"""Genera un CSV de prueba INVENTADO para el módulo Concatenación.
 
-Uso:  python tests/generar_ejemplo_libro_novedades.py
+Uso:  python tests/generar_ejemplo_concatenacion.py
 Crea tests/ejemplos/LibroNovedades_ejemplo.csv con el mismo formato que el export del reporte
 (Windows-1252, fin de línea de Windows, 3 filas descartables antes del encabezado).
 Los textos son inventados pero reproducen los casos del documento del módulo: comas internas

@@ -23,7 +23,7 @@ tests/                  # tests con pytest + tests/ejemplos/ (Excels INVENTADOS,
 | Cruce de Excels | `modulos/cruce.py` | `src/cruce.py` | Terminado |
 | Relleno de Excel mediante PDF | `modulos/relleno_pdf.py` | — | En desarrollo |
 | Asociación LG ↔ PCZ | `modulos/asociacion_lg_pcz.py` | `src/asociacion_lg_pcz.py` | MVP |
-| Libro de Novedades | `modulos/libro_novedades.py` | `src/libro_novedades.py` | MVP |
+| Concatenación | `modulos/concatenacion.py` | `src/concatenacion.py` | MVP |
 
 **Cruce de Excels**: subir 2+ Excels/CSV, ver sus columnas lado a lado, armar coincidencias
 (documento + columna, una o varias, con 2+ documentos cada una), elegir documento principal y
@@ -35,7 +35,7 @@ solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similit
 El progreso vive solo en memoria (no hay sesiones guardadas en disco). Cada aviso se asocia o se descarta. Export con hojas
 Asociaciones (columnas y orden elegidos), LG sin asociar y PCZ sin asociar (columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
 
-**Libro de Novedades**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por
+**Concatenación**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por
 número de novedad (Nro, Fecha, Hora inicio, Hora fin, Detalle). Hora fin = hora del último renglón cuyo
 `descrip` contiene una palabra clave (palabras completas, en orden, sin tildes/puntuación/conectores;
 «no» y «sin» nunca son conectores). Palabras clave y conectores se editan en pantalla y NO se guardan

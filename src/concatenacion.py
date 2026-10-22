@@ -1,4 +1,4 @@
-"""Libro de Novedades: convierte el CSV del reporte LibroNovedades en un Excel ordenado.
+"""Concatenación: convierte el CSV del reporte LibroNovedades en un Excel ordenado.
 
 El CSV trae una fila por cada RENGLÓN de texto (como el reporte paginado): número, estado,
 fecha y hora se repiten en cada renglón. Acá se juntan en una fila por número de novedad,

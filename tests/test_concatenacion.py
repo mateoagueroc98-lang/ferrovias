@@ -1,12 +1,12 @@
-"""Tests del módulo Libro de Novedades (correr con:  python -m pytest)."""
+"""Tests del módulo Concatenación (correr con:  python -m pytest)."""
 import datetime as dt
 import io
 
 import pytest
 from openpyxl import load_workbook
 
-from src import libro_novedades as ln
-from tests.generar_ejemplo_libro_novedades import ARCHIVO, generar
+from src import concatenacion as ln
+from tests.generar_ejemplo_concatenacion import ARCHIVO, generar
 
 T = dt.time
 CONECTORES = ln.CONECTORES_DEFECTO

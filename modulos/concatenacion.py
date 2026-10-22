@@ -1,17 +1,17 @@
-"""Módulo: Libro de Novedades, del CSV del reporte a un Excel con una fila por novedad."""
+"""Módulo: Concatenación, del CSV del Libro de Novedades a un Excel con una fila por novedad."""
 import re
 
 import streamlit as st
 
-from src import libro_novedades as ln
+from src import concatenacion as ln
 
-st.title("Libro de Novedades: CSV a Excel")
+st.title("Concatenación")
 st.caption("Convierte el CSV del reporte LibroNovedades (Reportes Grupo Emepa → Ferroviario → "
            "Operaciones → transporte → PCZ) en un Excel con una fila por número de novedad: "
            "fecha, hora de inicio, hora de fin y el detalle completo.")
 
 ss = st.session_state
-P = "ln_"  # prefijo de las claves de este módulo en session_state
+P = "conc_"  # prefijo de las claves de este módulo en session_state
 ss.setdefault(P + "opciones", list(ln.CLAVES_SUGERIDAS))
 ss.setdefault(P + "claves", list(ln.CLAVES_DEFECTO))
 

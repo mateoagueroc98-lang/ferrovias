@@ -10,7 +10,7 @@ Módulos (menú a la izquierda):
 - **Cruce de Excels**: lo de arriba.
 - **Relleno de Excel mediante PDF**: en desarrollo.
 - **Asociación LG ↔ PCZ**: asociar a mano cada párrafo del Libro de Guardia con las novedades del PCZ (ver abajo).
-- **Libro de Novedades**: pasar el CSV del reporte LibroNovedades a un Excel con una fila por novedad (ver abajo).
+- **Concatenación**: pasar el CSV del reporte LibroNovedades a un Excel con una fila por novedad (ver abajo).
 
 Corre en tu compu y se abre en el navegador en `http://localhost:8501`. Los Excels **nunca** se suben a GitHub (están en `.gitignore`).
 
@@ -118,7 +118,7 @@ La configuración de la app está en `.streamlit/config.toml`: solo se abre en t
 no manda estadísticas y no vigila los archivos (más rápido en discos de red; si se actualiza el código,
 cerrá y volvé a abrir la app).
 
-## Módulo: Libro de Novedades (CSV → Excel)
+## Módulo: Concatenación (Libro de Novedades, CSV → Excel)
 
 Convierte el CSV del reporte **LibroNovedades** (Reportes Grupo Emepa → Ferroviario → Operaciones →
 transporte → PCZ) en un Excel con **una fila por número de novedad**. El CSV trae una fila por cada
@@ -147,7 +147,7 @@ horas inválidas (la celda queda vacía) y detalles de más de 32.767 caracteres
 encabezado `numero,Descripción_Estado,fecha,hora,descrip` no está, el archivo se rechaza.
 
 **Probarlo con datos inventados**: subí `tests/ejemplos/LibroNovedades_ejemplo.csv` (se regenera con
-`python tests/generar_ejemplo_libro_novedades.py`).
+`python tests/generar_ejemplo_concatenacion.py`).
 
 ## Trabajar desde dos computadoras
 
@@ -166,8 +166,8 @@ src/cruce.py            # lógica del cruce por coincidencias
 modulos/asociacion_lg_pcz.py  # pantalla: Asociación LG ↔ PCZ
 src/ia.py               # llamadas a Claude (para el módulo de relleno)
 src/asociacion_lg_pcz.py      # lógica de la asociación (fechas, candidatos, exportación)
-modulos/libro_novedades.py    # pantalla: Libro de Novedades (CSV → Excel)
-src/libro_novedades.py        # lógica: lectura del CSV, agrupación, hora fin, Excel
+modulos/concatenacion.py      # pantalla: Concatenación (Libro de Novedades CSV → Excel)
+src/concatenacion.py          # lógica: lectura del CSV, agrupación, hora fin, Excel
 tests/                  # tests (python -m pytest) y Excels de ejemplo inventados
 datos/          # poné acá tus Excels (ignorados por git)
 ```
