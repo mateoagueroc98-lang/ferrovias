@@ -61,6 +61,8 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
      esa, sin tocar lo tildado), **!** (amarillo) y **!!** (naranja) la marcan para que su fila salga
      **resaltada en ese color en el Excel final** (hoja «Asociaciones», esté asociada o no). Tocar otra vez el mismo botón saca la marca. Si una asociación une novedades con
      marcas distintas, gana la naranja. Las novedades ya resueltas (en gris) muestran solo ! y !!.
+   - Los botones de acción (Elegir avisos del LG / Asociar, Descartar, Todas, Volver) quedan **fijos abajo
+     de la pantalla** mientras hacés scroll.
    - Atajos: **1–9** tildar novedad (paso ①) o aviso (paso ②) · **Enter** pasar al paso ② / asociar ·
      **D** descartar · **← →** día anterior/siguiente.
    - "Ver también día anterior / siguiente" (apagado por defecto) agrega esos avisos marcados como

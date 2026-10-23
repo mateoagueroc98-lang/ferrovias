@@ -387,6 +387,12 @@ mark { background: #FFE27A; color: inherit; padding: 0 .1em; border-radius: 2px;
 .tj-aviso { font-size: 0.8rem; color: #8A5E00; margin-top: 0.25rem; }
 .col-titulo { font-size: 0.85rem; font-weight: 600; opacity: 0.55; margin-bottom: 0.3rem; }
 .flecha { text-align: center; font-size: 1.4rem; opacity: 0.45; padding-top: 0.6rem; }
+/* Streamlit envuelve el contenedor en un stLayoutWrapper de su mismo tamaño: lo pegajoso es el envoltorio */
+[data-testid="stLayoutWrapper"]:has(> .st-key-barra_acciones) { position: sticky; bottom: 0; z-index: 50; }
+.st-key-barra_acciones { padding: 0.7rem 0 0.8rem;
+                         background: rgba(244, 243, 242, 0.94); backdrop-filter: blur(4px);
+                         border-top: 1px solid rgba(28, 26, 25, 0.15);
+                         box-shadow: 0 -8px 14px -10px rgba(28, 26, 25, 0.35); }
 .pasos { font-size: 0.95rem; margin: 0.2rem 0 0.6rem 0; }
 .pasos .off { opacity: 0.4; }
 </style>""")
@@ -547,14 +553,6 @@ with st.container(border=True):
 
                 fila_tabla(izq, der, flecha=False)
 
-        bc = st.columns([1.4, 1.2, 1, 1.4])
-        bc[0].button("➡️ Elegir avisos del LG", type="primary", on_click=ir_a_avisos, disabled=not b["novedades"],
-                     use_container_width=True)
-        bc[1].button("🗑️ Descartar", on_click=descartar, disabled=not b["novedades"], use_container_width=True,
-                     help="Las novedades tildadas no tienen aviso en el LG: salen en el Excel solo con su texto de PCZ.")
-        if len(pend_dia) > 1:
-            bc[2].button("☑ Todas", on_click=todas_las_pendientes, use_container_width=True,
-                         help="Tilda todas las novedades pendientes del día.")
     else:
         # ------------------------------------- Paso 2: elegir avisos del LG
         st.caption("Tildá abajo uno o varios avisos del LG: van apareciendo a la derecha. Después tocá «Asociar».")
@@ -572,12 +570,6 @@ with st.container(border=True):
                 st.markdown(html_vacia("todavía ninguno ↓ tildalos en la lista de abajo"), unsafe_allow_html=True)
 
         fila_tabla(izq_nueva, der_nueva)
-        bc = st.columns([1.3, 1.3, 1.3, 1.7])
-        bc[0].button("✅ Asociar", type="primary", on_click=asociar, disabled=not b["avisos"],
-                     use_container_width=True)
-        bc[1].button("🗑️ Descartar", on_click=descartar, use_container_width=True,
-                     help="Estas novedades no tienen aviso en el LG: salen en el Excel solo con su texto de PCZ.")
-        bc[2].button("⬅️ Volver a las novedades", on_click=volver_a_novedades, use_container_width=True)
 
 # ---------------------------------------------------------- avisos del LG
 if b["etapa"] == "lg":
@@ -673,6 +665,27 @@ if b["etapa"] == "lg":
     if len(sin_fecha):
         with st.expander(f"Avisos del LG sin fecha reconocible ({len(sin_fecha)})"):
             mostrar(sin_fecha, dibujadas + 1, "SIN FECHA", "sin_fecha")
+
+# ------------------------------------------------- botones de acción
+# Van al final de la página y quedan pegados abajo de la pantalla mientras se hace scroll
+# (position: sticky), así siempre están a mano.
+with st.container(key="barra_acciones"):
+    if b["etapa"] == "pcz":
+        bc = st.columns([1.4, 1.2, 1, 1.4])
+        bc[0].button("➡️ Elegir avisos del LG", type="primary", on_click=ir_a_avisos, disabled=not b["novedades"],
+                     use_container_width=True)
+        bc[1].button("🗑️ Descartar", on_click=descartar, disabled=not b["novedades"], use_container_width=True,
+                     help="Las novedades tildadas no tienen aviso en el LG: salen en el Excel solo con su texto de PCZ.")
+        if len(pend_dia) > 1:
+            bc[2].button("☑ Todas", on_click=todas_las_pendientes, use_container_width=True,
+                         help="Tilda todas las novedades pendientes del día.")
+    else:
+        bc = st.columns([1.3, 1.3, 1.3, 1.7])
+        bc[0].button("✅ Asociar", type="primary", on_click=asociar, disabled=not b["avisos"],
+                     use_container_width=True)
+        bc[1].button("🗑️ Descartar", on_click=descartar, use_container_width=True,
+                     help="Estas novedades no tienen aviso en el LG: salen en el Excel solo con su texto de PCZ.")
+        bc[2].button("⬅️ Volver a las novedades", on_click=volver_a_novedades, use_container_width=True)
 
 # Atajos de teclado: se engancha un único listener en la página (se reemplaza en cada recarga)
 # y solo actúa si los botones de esta pantalla están visibles.
