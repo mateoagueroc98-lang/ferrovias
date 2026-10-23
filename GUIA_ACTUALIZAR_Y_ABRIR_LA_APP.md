@@ -3,7 +3,7 @@
 Pasos para traer los últimos cambios de GitHub y usar la app en cada computadora.
 
 - [Casa – Mac](#casa--mac)
-- [Trabajo – Windows](#trabajo--windows) *(sin Git: se actualiza con ZIP)*
+- [Trabajo – Windows](#trabajo--windows)
 
 ---
 
@@ -100,70 +100,100 @@ app). Ojo: lo que no hayas descargado en **3. Exportar** se pierde.
 
 ## Trabajo – Windows
 
-En esta compu **no hay Git**: el proyecto se actualiza bajando un ZIP de GitHub y pegándolo
-encima de la carpeta. La carpeta del proyecto está en la unidad de red:
+La carpeta del proyecto está en la unidad de red y está conectada a GitHub con Git:
 
 ```
 Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias
 ```
 
-### Actualizar (cuando hay cambios nuevos en GitHub)
+### Uso de todos los días
 
-1. Si la app está abierta, cerrarla con `Ctrl + C` en la ventana negra.
-2. Entrar a https://github.com/mateoagueroc98-lang/ferrovias, botón verde **Code** →
-   **Download ZIP**. (Baja la versión estable, `main`.)
-3. En **Descargas**, clic derecho en `ferrovias-main.zip` → **Extraer todo** → **Extraer**.
-4. Entrar a la carpeta extraída `ferrovias-main` hasta ver `app.py` (a veces hay una carpeta
-   `ferrovias-main` adentro de otra). Seleccionar todo (`Ctrl + A`) y copiar (`Ctrl + C`).
-5. Ir a la carpeta `ferrovias` de `Y:`, pegar (`Ctrl + V`) y elegir
-   **Reemplazar los archivos en el destino**.
+Abrir la ventana negra (tecla Windows → escribir `cmd` → Enter), en cualquier carpeta, y pegar
+el bloque entero:
 
-> **Ojo:** pegar **encima**, no borrar la carpeta `ferrovias` vieja. El ZIP trae la carpeta
-> `datos\` **vacía** (sin tus Excels ni asociaciones guardadas) y trae `.env.example` (el modelo),
-> no tu `.env` con la clave. Si se borra la carpeta, eso se pierde.
+```
+cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
+git checkout main
+git pull
+start "" cmd /c "timeout /t 10 >nul & start chrome http://localhost:8501"
+py -3.13 -m streamlit run app.py --server.headless true
+```
 
-Para probar una rama que todavía no está en `main`: en GitHub elegirla en el menú de ramas
-(arriba a la izquierda, dice `main`) **antes** de tocar **Code → Download ZIP**.
+| Línea | Para qué sirve |
+|---|---|
+| `cd /d "Y:\...\ferrovias"` | Entra a la carpeta del proyecto, desde donde se esté. |
+| `git checkout main` | Se asegura de estar en `main`, la versión estable. |
+| `git pull` | Trae de GitHub los últimos cambios. |
+| `start "" cmd /c "timeout ... chrome ..."` | Espera 10 segundos a que arranque la app y la abre en Chrome. |
+| `py -3.13 -m streamlit run ...` | Abre la app (no se usa `.venv`: las librerías están instaladas en el usuario). |
 
-### Abrir la app
-
-1. Abrir la carpeta `ferrovias` en el Explorador, hacer clic en la barra de direcciones,
-   escribir `cmd` y Enter. Se abre una ventana negra ya ubicada en la carpeta.
-2. Escribir:
-
-   ```
-   python -m streamlit run app.py --server.headless true
-   ```
-
-3. Abrir **Chrome** en `http://localhost:8501`.
-
+- Si Chrome muestra «No se puede acceder a este sitio», esperar unos segundos y apretar **F5**:
+  desde la unidad de red la app tarda en arrancar.
 - **No cerrar la ventana negra** mientras se usa la app: corre ahí. Para apagarla: `Ctrl + C`.
-- Si dice que `python` no se reconoce, usar `py` en su lugar: `py -m streamlit run app.py --server.headless true`.
-- Si dice `No module named ...` (falta una librería, por ejemplo después de actualizar):
+- No tocar el botón **Deploy** de la app (la publicaría en internet).
 
-  ```
-  python -m pip install --user -r requirements.txt
-  ```
+### Si después de `git pull` aparece un error de que falta algo
 
-  y volver a abrir la app.
+Se agregó alguna librería nueva (dice `No module named ...`). En la ventana negra:
 
-### Instalación (solo la primera vez en esta compu)
+```
+cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
+py -3.13 -m pip install --user -r requirements.txt
+```
 
-1. **Python 3.13** desde https://www.python.org/downloads/windows/ — en el instalador tildar
-   *"Add python.exe to PATH"*. (No hace falta Git.)
-2. Bajar el proyecto como en [Actualizar](#actualizar-cuando-hay-cambios-nuevos-en-github)
-   y pegarlo en la carpeta de `Y:`.
-3. Abrir `cmd` en la carpeta (como en *Abrir la app*) e instalar las librerías:
+y volver a pegar el bloque de todos los días.
 
-   ```
-   python -m pip install --user -r requirements.txt
-   ```
+### Probar cambios que todavía no están en `main`
 
-   El `--user` las instala en el usuario (disco `C:`), sin permisos de administrador y sin
-   crear un `.venv` en la unidad de red, que sería lento.
-4. *(Opcional, para módulos con IA)*: `copy .env.example .env` y `notepad .env` para pegar la
-   clave de Anthropic.
+```
+cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
+git fetch
+git checkout NOMBRE-DE-LA-RAMA
+git pull
+py -3.13 -m streamlit run app.py --server.headless true
+```
+
+Para volver a la versión estable, usar de nuevo el bloque de todos los días (empieza con
+`git checkout main`).
 
 ### Empezar de cero en el módulo Asociación LG ↔ PCZ
 
 Igual que en la Mac: recargar la página o volver a abrir la app (no hay nada guardado que borrar).
+
+### Instalación (solo la primera vez en esta compu)
+
+> Ya está hecha. Queda anotada por si hay que rehacerla (por ejemplo, con otro usuario de Windows:
+> Python, librerías y configuración de Git son de cada usuario).
+
+1. **Python 3.13**: bajar el *Python Install Manager* de https://www.python.org/downloads/windows/.
+   Si la configuración avisa por los *alias de ejecución de aplicaciones*, activar
+   *Python (default)* y *Python install manager*. Después, en `cmd`: `py install 3.13`.
+2. **Git** desde https://git-scm.com/download/win (opciones por defecto).
+3. En esta compu la carpeta personal (`HOME`) apunta a `Y:\`, donde no se puede escribir. Para que
+   Git guarde su configuración en `C:` y no desconfíe de la unidad de red («dubious ownership»):
+
+   ```
+   setx HOME "%USERPROFILE%"
+   ```
+
+   cerrar la ventana negra, abrir una nueva y:
+
+   ```
+   git config --global --add safe.directory "*"
+   ```
+
+4. Bajar el proyecto: abrir `cmd` en la carpeta `Claude` y
+
+   ```
+   git clone https://github.com/mateoagueroc98-lang/ferrovias.git
+   ```
+
+5. Instalar las librerías (en el usuario, sin `.venv`: en la unidad de red sería lento):
+
+   ```
+   cd ferrovias
+   py -3.13 -m pip install --user -r requirements.txt
+   ```
+
+6. *(Opcional, para módulos con IA)*: `copy .env.example .env` y `notepad .env` para pegar la
+   clave de Anthropic.

@@ -1,9 +1,14 @@
 # Ferrovías – Automatización de Excels
 
-App local en **Python + Streamlit** para automatizar trabajo con Excels. El usuario la corre en
-Windows (`streamlit run app.py`, se abre en `http://localhost:8501`) desde dos computadoras
-(trabajo y casa), sincronizadas por GitHub. Es usuario no técnico: explicale en español, simple y
-con pasos concretos.
+App local en **Python + Streamlit** para automatizar trabajo con Excels. Se abre en
+`http://localhost:8501` desde dos computadoras sincronizadas por GitHub (comandos exactos en
+`GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md`):
+- **Casa – Mac**: `~/ferrovias`, con `.venv` (`source .venv/bin/activate` + `streamlit run app.py`).
+- **Trabajo – Windows**: `Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias`
+  (unidad de red), con Git. **Sin `.venv`**: librerías con `py -3.13 -m pip install --user`, la app
+  con `py -3.13 -m streamlit run app.py --server.headless true`. No pasarle comandos con `.venv`.
+
+Es usuario no técnico: explicale en español, simple y con pasos concretos.
 
 ## Estructura
 
