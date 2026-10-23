@@ -213,36 +213,34 @@ if paso == PASOS[2]:
     m3.metric("Filas de LG sin asociar", len(lg_resto))
     if p["pendientes"]:
         st.info(f"Quedan {p['pendientes']} novedad(es) de PCZ sin revisar: van a la hoja «PCZ sin asociar».")
-    st.caption("El Excel trae 3 hojas: **Asociaciones** (una fila por asociación, con las columnas "
-               "que elijas abajo), **PCZ sin asociar** y **LG sin asociar** (estas dos con las mismas columnas que "
-               "los archivos originales).")
+    st.caption("El Excel trae 3 hojas: **Asociaciones** (una fila por asociación, con la estructura de "
+               "abajo), **PCZ sin asociar** y **LG sin asociar** (estas dos con las mismas columnas que los "
+               "archivos originales).")
 
-    st.subheader("Columnas de la hoja «Asociaciones»", anchor=False)
-    opciones = a.columnas_disponibles(lg_original, pcz_original)
-    clave_cols = f"{P}cols_{trabajo['huella']}"
-    ss.setdefault(P + "cols_elegidas", {})
-    defecto = ss[P + "cols_elegidas"].get(trabajo["huella"]) or a.columnas_por_defecto(mapa_lg, mapa_pcz)
-    columnas = st.multiselect(
-        "Columnas, en el orden en que van a aparecer", opciones, default=[c for c in defecto if c in opciones],
-        key=clave_cols, placeholder="Elegí columnas",
-        help="El orden de la hoja es el orden en que las elegís: para mover una, sacala (✕) y volvé a "
-             "agregarla. Cuando una asociación tiene varias novedades o varios avisos, sus valores se juntan "
-             "en la misma celda separados por « | ». «Descripción» = en una misma celda, «PCZ» con su texto y "
-             "abajo «LG» con el suyo. «Descripción combinada» = descripción de PCZ + texto de LG en minúsculas.",
+    st.subheader("Hoja «Asociaciones»", anchor=False)
+    st.caption("Tiene siempre estas columnas, en este orden, igual que tu tabla madre: así podés copiar las "
+               "filas y pegarlas a continuación. Las columnas vacías se completan después.")
+    st.dataframe(
+        pd.DataFrame({"Columna": list(a.COLUMNAS_SALIDA),
+                      "Qué trae": [uso or "— vacía —" for uso in a.COLUMNAS_SALIDA.values()]}),
+        hide_index=True, use_container_width=True, height=35 * (len(a.COLUMNAS_SALIDA) + 1) + 3,
     )
-    ss[P + "cols_elegidas"][trabajo["huella"]] = columnas
-    if not columnas:
-        st.warning("Elegí al menos una columna.")
-        st.stop()
-    tabla = a.tabla_asociaciones(lg_original, pcz_original, lg, pcz, trabajo, mapa_lg, mapa_pcz, columnas)
+    numero_inicial = st.number_input(
+        "N° de la primera fila", min_value=0, value=ss.get(P + "numero_inicial", 1), step=1,
+        help="Poné el número que sigue en tu tabla madre: las demás filas siguen de a uno hacia abajo.")
+    ss[P + "numero_inicial"] = numero_inicial  # se recuerda si vas y volvés de este paso
+    tabla = a.tabla_asociaciones(lg, pcz, trabajo, int(numero_inicial))
     st.caption(f"Vista previa ({len(tabla)} asociación(es)):")
-    st.dataframe(tabla.head(20).map(a._texto_celda), hide_index=True, use_container_width=True)
+    vista = tabla.head(20).copy()
+    vista["Fecha"] = vista["Fecha"].map(lambda f: f"{f.day}/{f.month}/{f.year}" if hasattr(f, "day") else f)
+    st.dataframe(vista.map(lambda v: "" if v is None or (not isinstance(v, str) and pd.isna(v)) else str(v)),
+                 hide_index=True, use_container_width=True)
 
     nombre = st.text_input("Nombre del archivo a descargar", value="asociacion_LG_PCZ")
     # Sacar caracteres que Windows no acepta en nombres de archivo
     nombre = re.sub(r'[\\/:*?"<>|]', "", nombre).strip().removesuffix(".xlsx") or "asociacion_LG_PCZ"
     st.download_button(f"⬇️ Descargar {nombre}.xlsx",
-                       a.exportar(lg_original, pcz_original, lg, pcz, trabajo, mapa_lg, mapa_pcz, columnas),
+                       a.exportar(lg_original, pcz_original, lg, pcz, trabajo, mapa_lg, int(numero_inicial)),
                        f"{nombre}.xlsx", type="primary")
     st.stop()
 

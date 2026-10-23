@@ -517,9 +517,25 @@ def pendientes(trabajo: dict, novedades: list[int]) -> list[int]:
 
 
 # --------------------------------------------------------------- exportar
-DESCRIPCION = "Descripción"  # PCZ y LG en la misma celda, uno debajo del otro
-COMBINADA = "Descripción combinada"
-FILA_LG = "Fila LG"
+# Hoja «Asociaciones»: estructura fija, igual a la tabla madre del usuario (para copiar y pegar a
+# continuación). Las columnas vacías se completan después a mano.
+COLUMNAS_SALIDA = {
+    "N°": "Número consecutivo: arranca en el número que elijas y sube de a uno.",
+    "ID": None,
+    "Fecha": "Fecha de la novedad de PCZ (formato 19/9/2026).",
+    "Mes": None,
+    "N° Novedad": "Número de la novedad de PCZ (si se unieron varias: «1001 | 1002»).",
+    "Sistema": None,
+    "Subsistema": None,
+    "Parte": None,
+    "Elemento": None,
+    "Nombre correcto": None,
+    "Km. INPAN": None,
+    "BuscarV (Km. INPAN)": None,
+    "Modelo": None,
+    "Descripción": "Texto de PCZ en MAYÚSCULAS, un renglón vacío y abajo el texto del LG tal como viene.",
+}
+FORMATO_FECHA = "d/m/yyyy"
 
 
 def _texto_celda(v) -> str:
@@ -537,21 +553,9 @@ def _texto_celda(v) -> str:
     return str(v).strip()
 
 
-def columnas_disponibles(lg_original: pd.DataFrame, pcz_original: pd.DataFrame) -> list[str]:
-    """Columnas que se pueden elegir para la hoja Asociaciones."""
-    return ([f"PCZ · {c}" for c in pcz_original.columns] + [f"LG · {c}" for c in lg_original.columns]
-            + [DESCRIPCION, COMBINADA, FILA_LG])
-
-
-def columnas_por_defecto(mapa_lg: dict, mapa_pcz: dict) -> list[str]:
-    """Selección inicial: N°, fecha y hora de PCZ, y la Descripción (PCZ y LG en la misma celda)."""
-    salida = [f"PCZ · {mapa_pcz[c]}" for c in ("N° Novedad", "Fecha", "Hora") if c in mapa_pcz]
-    return salida + [DESCRIPCION]
-
-
 def texto_descripcion(textos_pcz: list[str], textos_lg: list[str]) -> str:
-    """Celda «Descripción»: «PCZ», sus textos (uno por renglón), «LG» y sus textos."""
-    return "\n".join(["PCZ", *textos_pcz, "LG", *textos_lg])
+    """Celda «Descripción»: textos de PCZ en mayúsculas, un renglón vacío y los textos del LG."""
+    return "\n".join(t.upper() for t in textos_pcz) + "\n\n" + "\n".join(textos_lg)
 
 
 def _claves(avisos_lg) -> list[tuple[int, int]]:
@@ -563,45 +567,27 @@ def _juntar(valores) -> str:
     return " | ".join(dict.fromkeys(v for v in (_texto_celda(x) for x in valores) if v))
 
 
-def tabla_asociaciones(lg_original: pd.DataFrame, pcz_original: pd.DataFrame, lg: pd.DataFrame,
-                       pcz: pd.DataFrame, trabajo: dict, mapa_lg: dict, mapa_pcz: dict,
-                       columnas: list[str]) -> pd.DataFrame:
-    """Una fila por asociación, con las columnas elegidas en el orden elegido.
+def tabla_asociaciones(lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, numero_inicial: int = 1) -> pd.DataFrame:
+    """Hoja «Asociaciones»: una fila por asociación, con la estructura fija de COLUMNAS_SALIDA.
 
-    Si la asociación tiene varias novedades de PCZ o varios avisos del LG, sus valores se juntan en
-    la misma celda separados por « | ». La transcripción de LG trae solo los avisos asociados.
+    Las asociaciones van en el orden de PCZ. Si una asociación une varias novedades, sus N° se
+    juntan con « | ». Las columnas sin dato quedan vacías.
     """
-    col_texto_lg = mapa_lg["Transcripción"]
     orden = sorted(trabajo["asociaciones"], key=lambda g: (min(g["novedades"]), g["novedades"]))
     filas = []
-    for g in orden:
+    for n, g in enumerate(orden):
         novs = list(g["novedades"])
         claves = [(i, j) for i, j in _claves(g["avisos"]) if i in lg.index and j < len(lg.loc[i, "avisos"])]
-        texto_lg = " | ".join(lg.loc[i, "avisos"][j] for i, j in claves)
-        filas_lg = list(dict.fromkeys(i for i, _ in claves))
-        fila = {}
-        for col in columnas:
-            if col == FILA_LG:
-                fila[col] = " | ".join(str(i + 1) for i in filas_lg)
-            elif col == DESCRIPCION:
-                fila[col] = texto_descripcion([pcz.loc[k, "descripcion"] for k in novs],
-                                              [lg.loc[i, "avisos"][j] for i, j in claves])
-            elif col == COMBINADA:
-                desc = " | ".join(pcz.loc[k, "descripcion"] for k in novs)
-                fila[col] = f"{desc} {texto_lg.lower()}".strip()
-            elif col.startswith("PCZ · "):
-                nombre = col[len("PCZ · "):]
-                valores = [pcz_original.iloc[k][nombre] for k in novs]
-                fila[col] = valores[0] if len(valores) == 1 else _juntar(valores)
-            elif col.startswith("LG · "):
-                nombre = col[len("LG · "):]
-                if nombre == col_texto_lg:
-                    fila[col] = texto_lg
-                else:
-                    valores = [lg_original.iloc[i][nombre] for i in filas_lg]
-                    fila[col] = valores[0] if len(valores) == 1 else _juntar(valores)
+        fechas = [pcz.loc[k, "fecha"] for k in novs if pcz.loc[k, "fecha"] is not None]
+        ids = [pcz.loc[k, "id"] for k in novs]
+        fila = dict.fromkeys(COLUMNAS_SALIDA, None)
+        fila["N°"] = numero_inicial + n
+        fila["Fecha"] = fechas[0] if fechas else _juntar(pcz.loc[k, "fecha_original"] for k in novs)
+        fila["N° Novedad"] = (int(ids[0]) if ids[0].isdigit() else ids[0]) if len(ids) == 1 else " | ".join(ids)
+        fila["Descripción"] = texto_descripcion([pcz.loc[k, "descripcion"] for k in novs],
+                                                [lg.loc[i, "avisos"][j] for i, j in claves])
         filas.append(fila)
-    return _fechas_sin_hora(pd.DataFrame(filas, columns=columnas))
+    return pd.DataFrame(filas, columns=list(COLUMNAS_SALIDA))
 
 
 def lg_sin_asociar(lg_original: pd.DataFrame, lg: pd.DataFrame, trabajo: dict, mapa_lg: dict) -> pd.DataFrame:
@@ -647,25 +633,24 @@ def _fechas_sin_hora(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def exportar(lg_original: pd.DataFrame, pcz_original: pd.DataFrame, lg: pd.DataFrame, pcz: pd.DataFrame,
-             trabajo: dict, mapa_lg: dict, mapa_pcz: dict, columnas: list[str]) -> bytes:
-    """Excel con las hojas Asociaciones, LG sin asociar y PCZ sin asociar (no toca los originales)."""
+             trabajo: dict, mapa_lg: dict, numero_inicial: int = 1) -> bytes:
+    """Excel con las hojas Asociaciones, PCZ sin asociar y LG sin asociar (no toca los originales)."""
     hojas = {
-        "Asociaciones": tabla_asociaciones(lg_original, pcz_original, lg, pcz, trabajo, mapa_lg, mapa_pcz,
-                                           columnas),
-        "LG sin asociar": lg_sin_asociar(lg_original, lg, trabajo, mapa_lg),
+        "Asociaciones": tabla_asociaciones(lg, pcz, trabajo, numero_inicial),
         "PCZ sin asociar": pcz_sin_asociar(pcz_original, pcz, trabajo),
+        "LG sin asociar": lg_sin_asociar(lg_original, lg, trabajo, mapa_lg),
     }
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl", date_format="DD/MM/YYYY",
                         datetime_format="DD/MM/YYYY HH:MM") as w:
         for nombre, df in hojas.items():
             df.to_excel(w, sheet_name=nombre, index=False)
-        for hoja in w.sheets.values():
+        for nombre, hoja in w.sheets.items():
             for fila in hoja.iter_rows(min_row=2):
                 for celda in fila:
                     if isinstance(celda.value, dt.date) and (
                             not isinstance(celda.value, dt.datetime) or celda.value.time() == dt.time(0)):
-                        celda.number_format = "DD/MM/YYYY"
+                        celda.number_format = FORMATO_FECHA if nombre == "Asociaciones" else "DD/MM/YYYY"
                     elif isinstance(celda.value, str) and "\n" in celda.value:
                         celda.alignment = Alignment(wrap_text=True, vertical="top")
             for col in hoja.columns:

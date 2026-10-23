@@ -40,7 +40,8 @@ eligen una o varias novedades del día (se unen) y después los avisos del LG (c
 transcripción) para asociarlas, o se descartan. Lo resuelto queda en gris hasta cambiar de día.
 Candidatos solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple
 sin IA. El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas
-Asociaciones (una fila por asociación; columnas y orden elegidos), LG sin asociar y PCZ sin asociar
+Asociaciones (una fila por asociación; estructura fija de 14 columnas `COLUMNAS_SALIDA`, N° consecutivo
+desde el número que se elige, Fecha d/m/yyyy, Descripción = PCZ en MAYÚSCULAS + renglón vacío + LG), LG sin asociar y PCZ sin asociar
 (columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
 
 **Concatenación**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por

@@ -202,32 +202,28 @@ MAPA_LG = {"Fecha": "Fecha", "Hora": "Hora", "Transcripción": "Transcripcion"}
 MAPA_PCZ = {"Fecha": "Fecha", "Descripción": "Descripcion", "N° Novedad": "Nº Novedad", "Hora": "Hora"}
 
 
-def test_columnas_por_defecto_y_disponibles(tmp_path):
-    lg_df, pcz_df, _, _ = _cargar_ejemplos(tmp_path)
-    defecto = a.columnas_por_defecto(MAPA_LG, MAPA_PCZ)
-    assert defecto == ["PCZ · Nº Novedad", "PCZ · Fecha", "PCZ · Hora", a.DESCRIPCION]
-    assert set(defecto) <= set(a.columnas_disponibles(lg_df, pcz_df))
+def test_estructura_fija_de_la_hoja_asociaciones():
+    assert list(a.COLUMNAS_SALIDA) == [
+        "N°", "ID", "Fecha", "Mes", "N° Novedad", "Sistema", "Subsistema", "Parte", "Elemento",
+        "Nombre correcto", "Km. INPAN", "BuscarV (Km. INPAN)", "Modelo", "Descripción"]
+    assert a.texto_descripcion(["Falla señal 14", "Normalizada"], ["Se informa falla.", "Se normaliza."]) == (
+        "FALLA SEÑAL 14\nNORMALIZADA\n\nSe informa falla.\nSe normaliza.")
 
 
 def test_tabla_asociaciones_una_fila_por_asociacion(tmp_path):
-    lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
+    _, _, lg, pcz = _cargar_ejemplos(tmp_path)
     s = _trabajo_ejemplo(pcz)
-    cols = ["PCZ · Nº Novedad", "PCZ · Descripcion", a.FILA_LG, "LG · Transcripcion", "LG · Pagina", a.COMBINADA]
-    t = a.tabla_asociaciones(lg_df, pcz_df, lg, pcz, s, MAPA_LG, MAPA_PCZ, cols)
-    assert list(t.columns) == cols and len(t) == 3
+    t = a.tabla_asociaciones(lg, pcz, s, numero_inicial=120)
+    assert list(t.columns) == list(a.COLUMNAS_SALIDA) and len(t) == 3
+    assert list(t["N°"]) == [120, 121, 122]  # consecutivo desde el número elegido
+    vacias = [c for c, uso in a.COLUMNAS_SALIDA.items() if uso is None]
+    assert t[vacias].isna().all().all()
     f = t.iloc[0]  # 1001 + 1002 unidas
-    assert f["PCZ · Nº Novedad"] == "1001 | 1002" and f[a.FILA_LG] == "1" and f["LG · Pagina"] == 12
-    assert f["PCZ · Descripcion"] == "Falla señal 14 Boulogne, a peligro 08:10 hs | Señal 14 Boulogne normalizada 09:12"
-    assert f["LG · Transcripcion"] == ("Se informa falla en señal 14 de estación Boulogne, concurre mecánico "
-                                       "Pérez. | Se normaliza señal 14 a las 9:10 hs.")
-    assert f[a.COMBINADA] == f["PCZ · Descripcion"] + " " + f["LG · Transcripcion"].lower()
-    assert t.iloc[1]["PCZ · Nº Novedad"] == 1003  # una sola novedad: el valor tal cual
-    d = a.tabla_asociaciones(lg_df, pcz_df, lg, pcz, s, MAPA_LG, MAPA_PCZ, [a.DESCRIPCION]).iloc[0, 0]
-    assert d == ("PCZ\nFalla señal 14 Boulogne, a peligro 08:10 hs\nSeñal 14 Boulogne normalizada 09:12\n"
-                 "LG\nSe informa falla en señal 14 de estación Boulogne, concurre mecánico Pérez.\n"
-                 "Se normaliza señal 14 a las 9:10 hs.")
-    g = t.iloc[2]  # 1022: avisos de las filas 5 y 1
-    assert g[a.FILA_LG] == "5 | 1" and g["LG · Pagina"] == "14 | 12"
+    assert f["N° Novedad"] == "1001 | 1002" and f["Fecha"] == F(2025, 3, 4)
+    assert f["Descripción"] == ("FALLA SEÑAL 14 BOULOGNE, A PELIGRO 08:10 HS\nSEÑAL 14 BOULOGNE NORMALIZADA 09:12\n\n"
+                                "Se informa falla en señal 14 de estación Boulogne, concurre mecánico Pérez.\n"
+                                "Se normaliza señal 14 a las 9:10 hs.")
+    assert t.iloc[1]["N° Novedad"] == 1003  # una sola novedad: número
 
 
 def test_sin_asociar_conserva_columnas_originales(tmp_path):
@@ -247,18 +243,17 @@ def test_sin_asociar_conserva_columnas_originales(tmp_path):
 def test_exportar_tres_hojas(tmp_path):
     lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
     s = _trabajo_ejemplo(pcz)
-    cols = a.columnas_por_defecto(MAPA_LG, MAPA_PCZ)
-    hojas = pd.read_excel(io.BytesIO(a.exportar(lg_df, pcz_df, lg, pcz, s, MAPA_LG, MAPA_PCZ, cols)),
-                          sheet_name=None)
-    assert list(hojas) == ["Asociaciones", "LG sin asociar", "PCZ sin asociar"]
-    assert list(hojas["Asociaciones"].columns) == cols and len(hojas["Asociaciones"]) == 3
-    assert hojas["Asociaciones"].iloc[1][a.DESCRIPCION] == (
-        "PCZ\nBrazo P.A.N. Sarmiento no baja 14:35\nLG\nBrazo del P.A.N. calle Sarmiento no baja, interviene Gómez.")
-    # En el Excel la celda tiene «ajustar texto» para que se vean los renglones
-    from openpyxl import load_workbook
-    libro = load_workbook(io.BytesIO(a.exportar(lg_df, pcz_df, lg, pcz, s, MAPA_LG, MAPA_PCZ, cols)))
-    assert libro["Asociaciones"].cell(row=2, column=len(cols)).alignment.wrap_text
+    datos = a.exportar(lg_df, pcz_df, lg, pcz, s, MAPA_LG, numero_inicial=7)
+    hojas = pd.read_excel(io.BytesIO(datos), sheet_name=None)
+    assert list(hojas) == ["Asociaciones", "PCZ sin asociar", "LG sin asociar"]
+    assert list(hojas["Asociaciones"].columns) == list(a.COLUMNAS_SALIDA) and len(hojas["Asociaciones"]) == 3
     assert len(hojas["LG sin asociar"]) == 4 and len(hojas["PCZ sin asociar"]) == len(pcz_df) - 4
+    # En el Excel: fecha real con formato d/m/aaaa y la descripción con «ajustar texto»
+    from openpyxl import load_workbook
+    hoja = load_workbook(io.BytesIO(datos))["Asociaciones"]
+    assert hoja["A2"].value == 7 and hoja["C2"].number_format == "d/m/yyyy"
+    assert hoja["C2"].value.date() == F(2025, 3, 4)
+    assert hoja["N2"].alignment.wrap_text and hoja["N2"].value.startswith("FALLA SEÑAL 14")
 
 
 # ------------------------------------------------ grupos aviso(s) -> novedad(es)

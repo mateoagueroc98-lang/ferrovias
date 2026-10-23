@@ -63,13 +63,17 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
      **OTRO DÍA**, para eventos que cruzan la medianoche.
    - Un aviso ya usado en otra asociación se puede elegir igual: se marca "ya asociado a N° …".
 3. **Exportar**: descarga un Excel nuevo con 3 hojas:
-   - **Asociaciones**: una fila por asociación (las novedades unidas de PCZ con sus avisos del LG).
-     Las columnas y su orden se eligen en un menú antes de descargar. Por defecto: N°, fecha y hora de
-     PCZ y **"Descripción"**, que trae en una misma celda «PCZ» con el texto de la/s novedad/es y
-     debajo «LG» con el texto de los avisos (cada uno en su renglón). También se puede agregar
-     cualquier columna de PCZ o de LG, "Descripción combinada" (descripción PCZ + texto LG en
-     minúsculas, en un solo renglón) y "Fila LG". La transcripción de LG trae solo los avisos asociados y, si hay
-     varias novedades o varios avisos, los valores se juntan en la misma celda separados por ` | `.
+   - **Asociaciones**: una fila por asociación (las novedades unidas de PCZ con sus avisos del LG),
+     con una **estructura fija** igual a la tabla madre, para copiar las filas y pegarlas a continuación:
+     N° · ID · Fecha · Mes · N° Novedad · Sistema · Subsistema · Parte · Elemento · Nombre correcto ·
+     Km. INPAN · BuscarV (Km. INPAN) · Modelo · Descripción.
+     - **N°**: consecutivo; el de la primera fila se escribe en pantalla y sube de a uno hacia abajo.
+     - **Fecha**: la de la novedad de PCZ, con formato 19/9/2026.
+     - **N° Novedad**: el de PCZ (si se unieron varias, separados por ` | `).
+     - **Descripción**: el texto de PCZ en MAYÚSCULAS, un renglón vacío y debajo el texto de los avisos
+       del LG tal como viene (cada uno en su renglón).
+     - ID, Mes, Sistema, Subsistema, Parte, Elemento, Nombre correcto, Km. INPAN, BuscarV y Modelo
+       van **vacías**, para completarlas después.
    - **PCZ sin asociar**: las novedades descartadas o sin revisar, con las columnas del Excel de PCZ.
    - **LG sin asociar**: los avisos que no quedaron en ninguna asociación, con las columnas del Excel
      de LG.
