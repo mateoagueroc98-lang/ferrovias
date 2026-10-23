@@ -213,18 +213,11 @@ if paso == PASOS[2]:
     m3.metric("Filas de LG sin asociar", len(lg_resto))
     if p["pendientes"]:
         st.info(f"Quedan {p['pendientes']} novedad(es) de PCZ sin revisar: van a la hoja «PCZ sin asociar».")
-    st.caption("El Excel trae 3 hojas: **Asociaciones** (una fila por asociación, con la estructura de "
-               "abajo), **PCZ sin asociar** y **LG sin asociar** (estas dos con las mismas columnas que los "
+    st.caption("El Excel trae 3 hojas: **Asociaciones** (una fila por asociación), "
+               "**PCZ sin asociar** y **LG sin asociar** (estas dos con las mismas columnas que los "
                "archivos originales).")
 
     st.subheader("Hoja «Asociaciones»", anchor=False)
-    st.caption("Tiene siempre estas columnas, en este orden, igual que tu tabla madre: así podés copiar las "
-               "filas y pegarlas a continuación. Las columnas vacías se completan después.")
-    st.dataframe(
-        pd.DataFrame({"Columna": list(a.COLUMNAS_SALIDA),
-                      "Qué trae": [uso or "— vacía —" for uso in a.COLUMNAS_SALIDA.values()]}),
-        hide_index=True, use_container_width=True, height=35 * (len(a.COLUMNAS_SALIDA) + 1) + 3,
-    )
     numero_inicial = st.number_input(
         "N° de la primera fila", min_value=0, value=ss.get(P + "numero_inicial", 1), step=1,
         help="Poné el número que sigue en tu tabla madre: las demás filas siguen de a uno hacia abajo.")
