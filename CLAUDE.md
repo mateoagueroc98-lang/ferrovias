@@ -35,10 +35,13 @@ tests/                  # tests con pytest + tests/ejemplos/ (Excels INVENTADOS,
 qué filas conservar, tildar columnas finales por documento (botones Todas/Ninguna), cruzar y
 descargar con nombre elegido. Las claves se normalizan (101 == 101.0, fechas sin hora, espacios).
 
-**Asociación LG ↔ PCZ**: asociar a mano filas del Libro de Guardia con novedades del PCZ. Candidatos
-solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple sin IA.
-El progreso vive solo en memoria (no hay sesiones guardadas en disco). Cada aviso se asocia o se descarta. Export con hojas
-Asociaciones (columnas y orden elegidos), LG sin asociar y PCZ sin asociar (columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
+**Asociación LG ↔ PCZ**: la principal es PCZ. Se recorre día por día (todos los días del PCZ): se
+eligen una o varias novedades del día (se unen) y después los avisos del LG (cada renglón de la
+transcripción) para asociarlas, o se descartan. Lo resuelto queda en gris hasta cambiar de día.
+Candidatos solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple
+sin IA. El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas
+Asociaciones (una fila por asociación; columnas y orden elegidos), LG sin asociar y PCZ sin asociar
+(columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
 
 **Concatenación**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por
 número de novedad (Nro, Fecha, Hora inicio, Hora fin, Detalle). Hora fin = hora del último renglón cuyo
