@@ -205,8 +205,7 @@ MAPA_PCZ = {"Fecha": "Fecha", "Descripción": "Descripcion", "N° Novedad": "Nº
 def test_columnas_por_defecto_y_disponibles(tmp_path):
     lg_df, pcz_df, _, _ = _cargar_ejemplos(tmp_path)
     defecto = a.columnas_por_defecto(MAPA_LG, MAPA_PCZ)
-    assert defecto == ["PCZ · Nº Novedad", "PCZ · Fecha", "PCZ · Hora", "PCZ · Descripcion",
-                       "LG · Transcripcion", a.COMBINADA]
+    assert defecto == ["PCZ · Nº Novedad", "PCZ · Fecha", "PCZ · Hora", a.DESCRIPCION]
     assert set(defecto) <= set(a.columnas_disponibles(lg_df, pcz_df))
 
 
@@ -223,6 +222,10 @@ def test_tabla_asociaciones_una_fila_por_asociacion(tmp_path):
                                        "Pérez. | Se normaliza señal 14 a las 9:10 hs.")
     assert f[a.COMBINADA] == f["PCZ · Descripcion"] + " " + f["LG · Transcripcion"].lower()
     assert t.iloc[1]["PCZ · Nº Novedad"] == 1003  # una sola novedad: el valor tal cual
+    d = a.tabla_asociaciones(lg_df, pcz_df, lg, pcz, s, MAPA_LG, MAPA_PCZ, [a.DESCRIPCION]).iloc[0, 0]
+    assert d == ("PCZ\nFalla señal 14 Boulogne, a peligro 08:10 hs\nSeñal 14 Boulogne normalizada 09:12\n"
+                 "LG\nSe informa falla en señal 14 de estación Boulogne, concurre mecánico Pérez.\n"
+                 "Se normaliza señal 14 a las 9:10 hs.")
     g = t.iloc[2]  # 1022: avisos de las filas 5 y 1
     assert g[a.FILA_LG] == "5 | 1" and g["LG · Pagina"] == "14 | 12"
 
@@ -249,6 +252,12 @@ def test_exportar_tres_hojas(tmp_path):
                           sheet_name=None)
     assert list(hojas) == ["Asociaciones", "LG sin asociar", "PCZ sin asociar"]
     assert list(hojas["Asociaciones"].columns) == cols and len(hojas["Asociaciones"]) == 3
+    assert hojas["Asociaciones"].iloc[1][a.DESCRIPCION] == (
+        "PCZ\nBrazo P.A.N. Sarmiento no baja 14:35\nLG\nBrazo del P.A.N. calle Sarmiento no baja, interviene Gómez.")
+    # En el Excel la celda tiene «ajustar texto» para que se vean los renglones
+    from openpyxl import load_workbook
+    libro = load_workbook(io.BytesIO(a.exportar(lg_df, pcz_df, lg, pcz, s, MAPA_LG, MAPA_PCZ, cols)))
+    assert libro["Asociaciones"].cell(row=2, column=len(cols)).alignment.wrap_text
     assert len(hojas["LG sin asociar"]) == 4 and len(hojas["PCZ sin asociar"]) == len(pcz_df) - 4
 
 

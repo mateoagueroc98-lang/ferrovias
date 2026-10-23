@@ -224,8 +224,8 @@ if paso == PASOS[2]:
         key=clave_cols, placeholder="Elegí columnas",
         help="El orden de la hoja es el orden en que las elegís: para mover una, sacala (✕) y volvé a "
              "agregarla. Cuando una asociación tiene varias novedades o varios avisos, sus valores se juntan "
-             "en la misma celda separados por « | ». «Descripción combinada» = descripción de PCZ + texto de LG en "
-             "minúsculas.",
+             "en la misma celda separados por « | ». «Descripción» = en una misma celda, «PCZ» con su texto y "
+             "abajo «LG» con el suyo. «Descripción combinada» = descripción de PCZ + texto de LG en minúsculas.",
     )
     ss[P + "cols_elegidas"][trabajo["huella"]] = columnas
     if not columnas:

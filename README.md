@@ -64,9 +64,11 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
    - Un aviso ya usado en otra asociación se puede elegir igual: se marca "ya asociado a N° …".
 3. **Exportar**: descarga un Excel nuevo con 3 hojas:
    - **Asociaciones**: una fila por asociación (las novedades unidas de PCZ con sus avisos del LG).
-     Las columnas y su orden se eligen en un menú antes de descargar (cualquier columna de PCZ o de
-     LG, más "Descripción combinada" = descripción PCZ + texto LG en minúsculas, para la tabla de
-     eventos RAMS, y "Fila LG"). La transcripción de LG trae solo los avisos asociados y, si hay
+     Las columnas y su orden se eligen en un menú antes de descargar. Por defecto: N°, fecha y hora de
+     PCZ y **"Descripción"**, que trae en una misma celda «PCZ» con el texto de la/s novedad/es y
+     debajo «LG» con el texto de los avisos (cada uno en su renglón). También se puede agregar
+     cualquier columna de PCZ o de LG, "Descripción combinada" (descripción PCZ + texto LG en
+     minúsculas, en un solo renglón) y "Fila LG". La transcripción de LG trae solo los avisos asociados y, si hay
      varias novedades o varios avisos, los valores se juntan en la misma celda separados por ` | `.
    - **PCZ sin asociar**: las novedades descartadas o sin revisar, con las columnas del Excel de PCZ.
    - **LG sin asociar**: los avisos que no quedaron en ninguna asociación, con las columnas del Excel

@@ -11,6 +11,7 @@ import re
 import unicodedata
 
 import pandas as pd
+from openpyxl.styles import Alignment
 
 # ------------------------------------------------------------------ columnas
 # Nombre canónico -> función que reconoce el encabezado ya normalizado
@@ -516,6 +517,7 @@ def pendientes(trabajo: dict, novedades: list[int]) -> list[int]:
 
 
 # --------------------------------------------------------------- exportar
+DESCRIPCION = "Descripción"  # PCZ y LG en la misma celda, uno debajo del otro
 COMBINADA = "Descripción combinada"
 FILA_LG = "Fila LG"
 
@@ -538,14 +540,18 @@ def _texto_celda(v) -> str:
 def columnas_disponibles(lg_original: pd.DataFrame, pcz_original: pd.DataFrame) -> list[str]:
     """Columnas que se pueden elegir para la hoja Asociaciones."""
     return ([f"PCZ · {c}" for c in pcz_original.columns] + [f"LG · {c}" for c in lg_original.columns]
-            + [COMBINADA, FILA_LG])
+            + [DESCRIPCION, COMBINADA, FILA_LG])
 
 
 def columnas_por_defecto(mapa_lg: dict, mapa_pcz: dict) -> list[str]:
-    """Selección inicial: N°, fecha, hora y descripción de PCZ; texto de LG; descripción combinada."""
-    salida = [f"PCZ · {mapa_pcz[c]}" for c in ("N° Novedad", "Fecha", "Hora", "Descripción") if c in mapa_pcz]
-    salida += [f"LG · {mapa_lg['Transcripción']}"]
-    return salida + [COMBINADA]
+    """Selección inicial: N°, fecha y hora de PCZ, y la Descripción (PCZ y LG en la misma celda)."""
+    salida = [f"PCZ · {mapa_pcz[c]}" for c in ("N° Novedad", "Fecha", "Hora") if c in mapa_pcz]
+    return salida + [DESCRIPCION]
+
+
+def texto_descripcion(textos_pcz: list[str], textos_lg: list[str]) -> str:
+    """Celda «Descripción»: «PCZ», sus textos (uno por renglón), «LG» y sus textos."""
+    return "\n".join(["PCZ", *textos_pcz, "LG", *textos_lg])
 
 
 def _claves(avisos_lg) -> list[tuple[int, int]]:
@@ -577,6 +583,9 @@ def tabla_asociaciones(lg_original: pd.DataFrame, pcz_original: pd.DataFrame, lg
         for col in columnas:
             if col == FILA_LG:
                 fila[col] = " | ".join(str(i + 1) for i in filas_lg)
+            elif col == DESCRIPCION:
+                fila[col] = texto_descripcion([pcz.loc[k, "descripcion"] for k in novs],
+                                              [lg.loc[i, "avisos"][j] for i, j in claves])
             elif col == COMBINADA:
                 desc = " | ".join(pcz.loc[k, "descripcion"] for k in novs)
                 fila[col] = f"{desc} {texto_lg.lower()}".strip()
@@ -657,7 +666,10 @@ def exportar(lg_original: pd.DataFrame, pcz_original: pd.DataFrame, lg: pd.DataF
                     if isinstance(celda.value, dt.date) and (
                             not isinstance(celda.value, dt.datetime) or celda.value.time() == dt.time(0)):
                         celda.number_format = "DD/MM/YYYY"
+                    elif isinstance(celda.value, str) and "\n" in celda.value:
+                        celda.alignment = Alignment(wrap_text=True, vertical="top")
             for col in hoja.columns:
-                largo = max((len(str(c.value)) for c in col if c.value is not None), default=8)
+                largo = max((len(renglon) for c in col if c.value is not None
+                             for renglon in str(c.value).split("\n")), default=8)
                 hoja.column_dimensions[col[0].column_letter].width = min(max(largo + 2, 10), 60)
     return buffer.getvalue()
