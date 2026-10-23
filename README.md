@@ -11,7 +11,7 @@ Módulos (menú a la izquierda):
 - **Transcripciones del Libro de Guardia**: en desarrollo.
 - **Asociación LG ↔ PCZ**: asociar a mano cada párrafo del Libro de Guardia con las novedades del PCZ (ver abajo).
 - **Concatenación**: pasar el CSV del reporte LibroNovedades a un Excel con una fila por novedad (ver abajo).
-- **Informes PowerPoint**: armar el informe mensual en PowerPoint a partir del Excel (en construcción; por ahora, plantillas — ver abajo).
+- **Informes PowerPoint**: armar el informe mensual en PowerPoint a partir del Excel (en construcción; por ahora, plantillas y configuraciones — ver abajo).
 
 Corre en tu compu y se abre en el navegador en `http://localhost:8501`. Los Excels **nunca** se suben a GitHub (están en `.gitignore`).
 
@@ -161,7 +161,7 @@ tests/                  # tests (python -m pytest) y Excels de ejemplo inventado
 datos/          # poné acá tus Excels (ignorados por git)
 ```
 
-## Módulo: Informes PowerPoint (etapa 1: plantillas)
+## Módulo: Informes PowerPoint (etapas 1 y 2: plantillas y configuraciones)
 
 Una **plantilla** sale de un informe PowerPoint ya armado. En **Plantillas → Nueva plantilla** subís el
 `.pptx` y la app detecta, diapositiva por diapositiva, los **textos** (cuadros de texto, títulos, textos
@@ -177,3 +177,18 @@ dentro de grupos y celdas de tablas) y los **lugares de imagen** (capturas, grá
 
 Las plantillas quedan guardadas en la carpeta `informes/` de la app (no se suben a GitHub). Los archivos
 reales para probar van en `muestras/` (tampoco se suben).
+
+Una **configuración** se arma sobre una plantilla (**Configuraciones de informe → Nueva configuración**) y
+dice de dónde sale cada cosa del Excel. Se sube un Excel de referencia (no se guarda, solo su nombre) y:
+- Para cada **lugar de imagen**: la hoja (solo las visibles), si toma un **rango** (desde / hasta, ej. A5 a
+  N41) o un **gráfico** de esa hoja (también los modernos, como treemap), el **modo** (captura o gráfico
+  pegado editable; este último solo para gráficos) y el **ajuste** en el recuadro (encajar, al ancho o al
+  alto; siempre centrado). **👁️ Vista previa** muestra cómo queda en el recuadro.
+- Para cada **texto variable**: **texto libre** (con valor por defecto) o una **celda del Excel** (hoja +
+  celda, ej. Carátula!D32); se muestra el valor que tiene.
+- Si el Excel cambió (una hoja renombrada, un gráfico que ya no está), la app lo avisa.
+- En la compu del trabajo las capturas las hace Excel (abre una copia invisible, actualiza las tablas
+  dinámicas y la cierra sin guardar, sin tocar tus Excel abiertos). En la Mac se ven imágenes de relleno.
+
+Las configuraciones quedan en `informes/configuraciones/`. Una plantilla que tiene configuraciones no se
+puede eliminar.

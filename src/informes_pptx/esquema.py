@@ -36,14 +36,18 @@ def svg(diapositiva: dict, tamano: dict, fondo_png: bytes | None = None, resalta
     recuadros += [(f"I{i}", img["id"], "imagen", img["caja"], img["nombre"])
                   for i, img in enumerate(diapositiva["imagenes"], 1)]
     # Los más grandes primero, así los chicos quedan arriba y se pueden ver
-    recuadros.sort(key=lambda r: -(r[3]["ancho"] * r[3]["alto"]))
+    recuadros.sort(key=lambda r: (r[1] == resaltado, -(r[3]["ancho"] * r[3]["alto"])))
     for etiqueta, rid, tipo, caja, texto in recuadros:
         borde, relleno = ESTILOS[tipo]
         x, y = caja["x"] * k, caja["y"] * k
         w, h = max(caja["ancho"] * k, 4), max(caja["alto"] * k, 4)
-        grosor = 4 if rid == resaltado else 2
+        grosor = 6 if rid == resaltado else 2
         trazo = "" if tipo == "imagen" else ' stroke-dasharray="6 4"'
-        partes.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="3" '
+        if rid == resaltado:  # el elegido, bien marcado
+            relleno = "rgba(212,25,32,.30)" if tipo == "imagen" else "rgba(255,226,122,.85)"
+        # Si hay uno resaltado, los demás quedan apagados
+        apagado = ' opacity=".35"' if resaltado and rid != resaltado else ""
+        partes.append(f'<g{apagado}><rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="3" '
                       f'fill="{"none" if fondo_png and tipo == "fijo" else relleno}" stroke="{borde}" '
                       f'stroke-width="{grosor}"{trazo}/>')
         ancho_et = 15 * len(etiqueta) + 12
@@ -53,6 +57,6 @@ def svg(diapositiva: dict, tamano: dict, fondo_png: bytes | None = None, resalta
                           f'{escape(_corto(texto, max(int(libre / 10), 3)))}</text>')
         partes.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{ancho_et}" height="28" rx="3" fill="{borde}"/>'
                       f'<text x="{x + 6:.1f}" y="{y + 21:.1f}" font-size="19" font-weight="700" '
-                      f'fill="#FFFFFF">{etiqueta}</text>')
+                      f'fill="#FFFFFF">{etiqueta}</text></g>')
     partes.append("</svg>")
     return "".join(partes)
