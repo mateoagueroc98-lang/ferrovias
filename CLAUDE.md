@@ -21,7 +21,7 @@ tests/                  # tests con pytest + tests/ejemplos/ (Excels INVENTADOS,
 | Módulo (menú) | Pantalla | Lógica | Estado |
 |---|---|---|---|
 | Cruce de Excels | `modulos/cruce.py` | `src/cruce.py` | Terminado |
-| Relleno de Excel mediante PDF | `modulos/relleno_pdf.py` | — | En desarrollo |
+| Transcripciones del Libro de Guardia | `modulos/relleno_pdf.py` | — | En desarrollo |
 | Asociación LG ↔ PCZ | `modulos/asociacion_lg_pcz.py` | `src/asociacion_lg_pcz.py` | MVP |
 | Concatenación | `modulos/concatenacion.py` | `src/concatenacion.py` | MVP |
 

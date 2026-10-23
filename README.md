@@ -8,7 +8,7 @@ App local (Streamlit) para:
 
 Módulos (menú a la izquierda):
 - **Cruce de Excels**: lo de arriba.
-- **Relleno de Excel mediante PDF**: en desarrollo.
+- **Transcripciones del Libro de Guardia**: en desarrollo.
 - **Asociación LG ↔ PCZ**: asociar a mano cada párrafo del Libro de Guardia con las novedades del PCZ (ver abajo).
 - **Concatenación**: pasar el CSV del reporte LibroNovedades a un Excel con una fila por novedad (ver abajo).
 
@@ -168,7 +168,7 @@ El `.env` (tu clave) y los Excels quedan solo en cada máquina; hay que crear el
 ```
 app.py                  # punto de entrada y menú de módulos
 modulos/cruce.py        # pantalla: Cruce de Excels
-modulos/relleno_pdf.py  # pantalla: Relleno de Excel mediante PDF (en desarrollo)
+modulos/relleno_pdf.py  # pantalla: Transcripciones del Libro de Guardia (en desarrollo)
 src/cruce.py            # lógica del cruce por coincidencias
 modulos/asociacion_lg_pcz.py  # pantalla: Asociación LG ↔ PCZ
 src/ia.py               # llamadas a Claude (para el módulo de relleno)
