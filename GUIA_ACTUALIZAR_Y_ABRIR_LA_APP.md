@@ -108,7 +108,11 @@ Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias
 
 ### Uso de todos los días
 
-Abrir la ventana negra (tecla Windows → escribir `cmd` → Enter), en cualquier carpeta, y pegar
+**Con doble clic:** el archivo `abrir_app_windows.bat` (en la carpeta `ferrovias`) hace todo lo de
+abajo. Para tenerlo en el escritorio: clic derecho en el archivo → **Enviar a** → **Escritorio
+(crear acceso directo)**. Para cerrar la app: `Ctrl + C` en la ventana negra (o cerrarla).
+
+**A mano:** abrir la ventana negra (tecla Windows → escribir `cmd` → Enter), en cualquier carpeta, y pegar
 el bloque entero:
 
 ```
