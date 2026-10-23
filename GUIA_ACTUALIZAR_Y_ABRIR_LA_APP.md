@@ -106,6 +106,14 @@ La carpeta del proyecto está en la unidad de red y está conectada a GitHub con
 Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias
 ```
 
+La usan **dos compus**: la de Mateo y la del jefe. Como `Y:` es compartido, es **la misma carpeta**
+para las dos: el proyecto no se baja de nuevo en cada compu, pero Python, Git y las librerías se
+instalan en cada usuario de Windows.
+
+> **Ojo:** si una compu cambia de rama (`git checkout ...`), la carpeta cambia **para las dos**.
+> El acceso directo siempre vuelve a `main`. Para el uso normal (siempre en `main`) no hay problema,
+> y la app puede estar abierta en las dos compus a la vez.
+
 ### Uso de todos los días
 
 **Con doble clic:** el archivo `abrir_app_windows.bat` (en la carpeta `ferrovias`) hace todo lo de
@@ -154,6 +162,7 @@ cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
 git fetch
 git checkout NOMBRE-DE-LA-RAMA
 git pull
+start "" cmd /c "timeout /t 10 >nul & start chrome http://localhost:8501"
 py -3.13 -m streamlit run app.py --server.headless true
 ```
 
@@ -166,13 +175,24 @@ Igual que en la Mac: recargar la página o volver a abrir la app (no hay nada gu
 
 ### Instalación (solo la primera vez en esta compu)
 
-> Ya está hecha. Queda anotada por si hay que rehacerla (por ejemplo, con otro usuario de Windows:
-> Python, librerías y configuración de Git son de cada usuario).
+> Ya está hecha en la compu de Mateo y en la del jefe. Queda anotada por si hay que rehacerla
+> (otra compu u otro usuario de Windows: Python, librerías y configuración de Git son de cada usuario).
+> En una compu nueva **se saltea el paso 4**: la carpeta en `Y:` ya existe.
+>
+> Si un instalador pide **usuario y contraseña de administrador**, cancelarlo y usar la opción sin
+> permisos que se indica en cada paso.
 
 1. **Python 3.13**: bajar el *Python Install Manager* de https://www.python.org/downloads/windows/.
    Si la configuración avisa por los *alias de ejecución de aplicaciones*, activar
-   *Python (default)* y *Python install manager*. Después, en `cmd`: `py install 3.13`.
+   *Python (default)* y *Python install manager*. Después, en `cmd`: `py install 3.13`
+   (si `py -3.13 --version` dice *No runtime installed that matches 3.13*, falta este comando).
+   - *Sin permisos de administrador:* bajar el **"Windows installer (64-bit)"** de Python 3.13,
+     **destildar** *"Use admin privileges when installing py.exe"* y tildar *"Add python.exe to PATH"*.
 2. **Git** desde https://git-scm.com/download/win (opciones por defecto).
+   - *Sin permisos de administrador:* bajar **"Git for Windows Portable"**, descomprimirlo en
+     `%USERPROFILE%\PortableGit` y agregar `%USERPROFILE%\PortableGit\cmd` al **Path** en
+     *"Editar las variables de entorno de esta cuenta"*. Abrir una ventana negra nueva y probar
+     `git --version`.
 3. En esta compu la carpeta personal (`HOME`) apunta a `Y:\`, donde no se puede escribir. Para que
    Git guarde su configuración en `C:` y no desconfíe de la unidad de red («dubious ownership»):
 
@@ -200,4 +220,6 @@ Igual que en la Mac: recargar la página o volver a abrir la app (no hay nada gu
    ```
 
 6. *(Opcional, para módulos con IA)*: `copy .env.example .env` y `notepad .env` para pegar la
-   clave de Anthropic.
+   clave de Anthropic. (El `.env` queda en la carpeta compartida: sirve para las dos compus.)
+7. **Acceso directo:** clic derecho en `abrir_app_windows.bat` → **Enviar a** → **Escritorio
+   (crear acceso directo)**.
