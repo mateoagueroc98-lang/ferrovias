@@ -256,6 +256,43 @@ def test_exportar_tres_hojas(tmp_path):
     assert hoja["N2"].alignment.wrap_text and hoja["N2"].value.startswith("FALLA SEÑAL 14")
 
 
+def test_marcar_pone_cambia_y_saca():
+    s = a.trabajo_nuevo("h")
+    a.marcar(s, 3, "amarilla")
+    assert s["marcas"] == {3: "amarilla"}
+    a.marcar(s, 3, "naranja")                     # otro color: lo reemplaza
+    assert s["marcas"] == {3: "naranja"}
+    a.marcar(s, 3, "naranja")                     # el mismo color otra vez: la saca
+    assert s["marcas"] == {}
+
+
+def test_marca_de_una_fila_naranja_pesa_mas():
+    s = a.trabajo_nuevo("h")
+    a.marcar(s, 1, "amarilla")
+    a.marcar(s, 2, "naranja")
+    assert a.marca(s, [1]) == "amarilla" and a.marca(s, [1, 2]) == "naranja" and a.marca(s, [5]) is None
+
+
+def test_exportar_resalta_las_filas_marcadas(tmp_path):
+    from openpyxl import load_workbook
+    lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
+    s = _trabajo_ejemplo(pcz)
+    pos = {n: k for k, n in enumerate(pcz["id"])}
+    a.marcar(s, pos["1002"], "amarilla")          # asociada (unida con 1001): fila 2 de Asociaciones
+    a.marcar(s, pos["1003"], "naranja")           # asociada: fila 3 de Asociaciones
+    a.marcar(s, pos["1004"], "amarilla")          # descartada: va a «PCZ sin asociar»
+    libro = load_workbook(io.BytesIO(a.exportar(lg_df, pcz_df, lg, pcz, s, MAPA_LG)))
+    asoc, resto = libro["Asociaciones"], libro["PCZ sin asociar"]
+    color = lambda celda: celda.fill.fgColor.rgb if celda.fill.fill_type == "solid" else None
+    assert {color(c) for c in asoc[2]} == {"00FFFF00"}
+    assert {color(c) for c in asoc[3]} == {"00FFC000"}
+    assert {color(c) for c in asoc[4]} == {None}
+    fila_1004 = a._quedan(pcz, s).index(pos["1004"]) + 2
+    assert {color(c) for c in resto[fila_1004]} == {"00FFFF00"}
+    assert all(color(c) is None for n, fila in enumerate(resto.iter_rows(min_row=2), start=2)
+               if n != fila_1004 for c in fila)
+
+
 # ------------------------------------------------ grupos aviso(s) -> novedad(es)
 def test_puntaje_por_aviso_y_no_por_parrafo():
     lg = pd.DataFrame({"fecha": [F(2025, 3, 4)], "hora": [None],

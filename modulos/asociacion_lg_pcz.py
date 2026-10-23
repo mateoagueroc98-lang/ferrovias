@@ -324,6 +324,22 @@ def descartar():
         seguir()
 
 
+def desechar(k: int):
+    """🗑️ al lado de una tarjeta: descarta solo esa novedad, sin tocar lo tildado en las demás."""
+    a.descartar(trabajo, [k])
+    b = borrador()
+    if k in b["novedades"]:
+        b["novedades"].remove(k)
+    if not b["novedades"]:
+        b["etapa"] = "pcz"
+    if not a.pendientes(trabajo, del_dia()):
+        seguir()
+
+
+def marcar(k: int, color: str):
+    a.marcar(trabajo, k, color)
+
+
 def quitar(i: int):
     a.quitar_asociacion(trabajo, i)
     ss[P + "ver"] += 1
@@ -348,6 +364,24 @@ mark { background: #FFE27A; color: inherit; padding: 0 .1em; border-radius: 2px;
 .tj-pcz { border-left: 4px solid #D41920;
           background: linear-gradient(90deg, rgba(212, 25, 32, 0.08), rgba(212, 25, 32, 0.02)); }
 .tj-hecha { opacity: 0.5; filter: grayscale(1); }
+/* Marcas: la tarjeta toma el color con el que se va a resaltar su fila en el Excel */
+.tj-pcz.tj-amarilla { background: #FFF3B0; }
+.tj-pcz.tj-naranja { background: #FFD9A8; }
+.tj-hecha.tj-amarilla, .tj-hecha.tj-naranja { filter: none; opacity: 0.6; }
+[class*="st-key-tarjeta_p"][class*="_amarilla"]:has(input) { background: #FFF3B0; }
+[class*="st-key-tarjeta_p"][class*="_naranja"]:has(input) { background: #FFD9A8; }
+/* Botonera chica a la izquierda de cada novedad: 🗑️ descartar · ! amarilla · !! naranja */
+[class*="st-key-botonera_"] { gap: 0.25rem; }
+[class*="st-key-bt_"], [class*="st-key-bt_"] > div { width: 100% !important; }
+[class*="st-key-bt_"] button { min-height: 1.7rem; height: 1.7rem; padding: 0; width: 100%;
+                               font-weight: 800; line-height: 1; color: #1C1A19; }
+[class*="st-key-bt_tacho"] button { background: #E4E2E0 !important; border: 1px solid #C9C6C3; }
+[class*="st-key-bt_amarilla"] button { background: #FFE45C !important; border: 1px solid #C98A00; }
+[class*="st-key-bt_naranja"] button { background: #FFA733 !important; border: 1px solid #C46A00; }
+[class*="st-key-bt_amarilla"]:not([class*="_on"]) button,
+[class*="st-key-bt_naranja"]:not([class*="_on"]) button { opacity: 0.5; }
+[class*="st-key-bt_"][class*="_on"] button { box-shadow: inset 0 0 0 2px #1C1A19; }
+[class*="st-key-bt_"] button:hover { opacity: 1; color: #1C1A19; filter: brightness(0.95); }
 .tj-vacia { border-style: dashed; opacity: 0.55; text-align: center; font-size: 0.9rem; }
 .tj-num { font-size: 0.78rem; font-weight: 600; opacity: 0.7; margin-bottom: 0.15rem; }
 .tj-aviso { font-size: 0.8rem; color: #8A5E00; margin-top: 0.25rem; }
@@ -372,8 +406,12 @@ def titulo_novedad(k: int) -> str:
     return f"N° {pcz.loc[k, 'id']}" + (f" · {hora}" if hora else "")
 
 
+def color_de(k: int) -> str:
+    return trabajo.get("marcas", {}).get(k) or "sin"
+
+
 def html_pcz(k: int, hecha: bool = False) -> str:
-    return (f"<div class='tj tj-pcz{' tj-hecha' if hecha else ''}'><div class='tj-num'>{titulo_novedad(k)}</div>"
+    return (f"<div class='tj tj-pcz tj-{color_de(k)}{' tj-hecha' if hecha else ''}'><div class='tj-num'>{titulo_novedad(k)}</div>"
             f"{a.resaltar(pcz.loc[k, 'descripcion'] or '(sin descripción)', set())}</div>")
 
 
@@ -385,6 +423,22 @@ def html_aviso(clave_aviso: str, hecha: bool = False, novedades_propias=()) -> s
     return (f"<div class='tj tj-lg{' tj-hecha' if hecha else ''}'><div class='tj-num'>LG fila {av['fila_lg'] + 1}"
             f" · {a.formatear_fecha(av['fecha'])}{' · ' + hora if hora else ''}</div>"
             f"{a.resaltar(av['texto'], set())}{aviso_otras}</div>")
+
+
+def con_botonera(k: int, tarjeta, tacho: bool = True):
+    """Tarjeta de una novedad con sus botones chicos a la izquierda (🗑️ si está pendiente, ! y !!)."""
+    color = color_de(k)
+    cb, cc = st.columns([1, 8], gap="small")
+    with cb, st.container(key=f"botonera_{ver}_{k}"):
+        if tacho:
+            st.button("🗑️", key=f"bt_tacho_{ver}_{k}", on_click=desechar, args=(k,),
+                      help="Descartar esta novedad: va a la hoja «PCZ sin asociar».")
+        for marca, texto, nombre in [("amarilla", "!", "amarillo"), ("naranja", "!!", "naranja")]:
+            activa = color == marca
+            st.button(texto, key=f"bt_{marca}_{ver}_{k}{'_on' if activa else ''}", on_click=marcar, args=(k, marca),
+                      help=("Sacar la marca" if activa else f"Resaltar en {nombre} su fila del Excel final"))
+    with cc:
+        tarjeta()
 
 
 def html_vacia(texto: str, hecha: bool = False) -> str:
@@ -455,7 +509,9 @@ with st.container(border=True):
                 hechas.update(propias)
 
                 def izq(propias=propias):
-                    st.markdown("".join(html_pcz(x, hecha=True) for x in propias), unsafe_allow_html=True)
+                    for x in propias:
+                        con_botonera(x, lambda x=x: st.markdown(html_pcz(x, hecha=True), unsafe_allow_html=True),
+                                     tacho=False)
 
                 def der(g=g, i=i):
                     st.markdown("".join(html_aviso(c, True, g["novedades"]) for c in g["avisos"]
@@ -465,7 +521,7 @@ with st.container(border=True):
                 fila_tabla(izq, der)
             elif k in trabajo["descartadas"]:
                 def izq(k=k):
-                    st.markdown(html_pcz(k, hecha=True), unsafe_allow_html=True)
+                    con_botonera(k, lambda: st.markdown(html_pcz(k, hecha=True), unsafe_allow_html=True), tacho=False)
 
                 def der(k=k):
                     st.markdown(html_vacia("🗑️ descartada (sin aviso en el LG)", hecha=True), unsafe_allow_html=True)
@@ -475,13 +531,16 @@ with st.container(border=True):
             else:
                 orden = pend_dia.index(k) + 1
 
-                def izq(k=k, orden=orden):
-                    with st.container(border=True, key=f"tarjeta_p_{ver}_{k}"):
+                def tarjeta(k=k, orden=orden):
+                    with st.container(border=True, key=f"tarjeta_p_{ver}_{k}_{color_de(k)}"):
                         clave = f"{P}nov_{ver}_{k}"
                         st.checkbox(f"\\[{orden}\\] {titulo_novedad(k)}", value=k in b["novedades"], key=clave,
                                     on_change=tildar, args=("novedades", k, clave))
                         st.markdown(a.resaltar(pcz.loc[k, "descripcion"] or "(sin descripción)", set()),
                                     unsafe_allow_html=True)
+
+                def izq(k=k, tarjeta=tarjeta):
+                    con_botonera(k, tarjeta)
 
                 def der():
                     st.markdown(html_vacia("pendiente"), unsafe_allow_html=True)
@@ -502,7 +561,8 @@ with st.container(border=True):
         titulos_tabla("Avisos elegidos")
 
         def izq_nueva():
-            st.markdown("".join(html_pcz(k) for k in b["novedades"]), unsafe_allow_html=True)
+            for k in list(b["novedades"]):
+                con_botonera(k, lambda k=k: st.markdown(html_pcz(k), unsafe_allow_html=True))
 
         def der_nueva():
             if b["avisos"]:

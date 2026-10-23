@@ -38,6 +38,8 @@ descargar con nombre elegido. Las claves se normalizan (101 == 101.0, fechas sin
 **Asociación LG ↔ PCZ**: la principal es PCZ. Se recorre día por día (todos los días del PCZ): se
 eligen una o varias novedades del día (se unen) y después los avisos del LG (cada renglón de la
 transcripción) para asociarlas, o se descartan. Lo resuelto queda en gris hasta cambiar de día.
+Cada novedad tiene a la izquierda 🗑️ (descartar solo esa) y ! / !! (marca amarilla / naranja: resalta su
+fila en el Excel final; la naranja gana si una asociación une ambas).
 Candidatos solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple
 sin IA. El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas
 Asociaciones (una fila por asociación; estructura fija de 14 columnas `COLUMNAS_SALIDA`, N° consecutivo

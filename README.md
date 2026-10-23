@@ -57,6 +57,11 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
      aparecen los demás (el buscador busca siempre entre todos).
    - Novedades y avisos se muestran como tarjetas: un clic en cualquier parte de la tarjeta la
      tilda o destilda (las elegidas se pintan de color).
+   - A la izquierda de cada novedad de PCZ hay 3 botones chicos: **🗑️** la descarta al instante (solo
+     esa, sin tocar lo tildado), **!** (amarillo) y **!!** (naranja) la marcan para que su fila salga
+     **resaltada en ese color en el Excel final** (en «Asociaciones» si está asociada, en «PCZ sin
+     asociar» si no). Tocar otra vez el mismo botón saca la marca. Si una asociación une novedades con
+     marcas distintas, gana la naranja. Las novedades ya resueltas (en gris) muestran solo ! y !!.
    - Atajos: **1–9** tildar novedad (paso ①) o aviso (paso ②) · **Enter** pasar al paso ② / asociar ·
      **D** descartar · **← →** día anterior/siguiente.
    - "Ver también día anterior / siguiente" (apagado por defecto) agrega esos avisos marcados como

@@ -11,7 +11,7 @@ import re
 import unicodedata
 
 import pandas as pd
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, PatternFill
 
 # ------------------------------------------------------------------ columnas
 # Nombre canónico -> función que reconoce el encabezado ya normalizado
@@ -463,8 +463,9 @@ def trabajo_nuevo(huella_archivos: str) -> dict:
 
     asociaciones: [{"novedades": [posición en PCZ], "avisos": ["fila:aviso" del LG]}]
     descartadas: novedades de PCZ sin aviso en el LG.
+    marcas: {posición en PCZ: "amarilla" | "naranja"}, para resaltar su fila en el Excel final.
     """
-    return {"huella": huella_archivos, "dia": 0, "asociaciones": [], "descartadas": []}
+    return {"huella": huella_archivos, "dia": 0, "asociaciones": [], "descartadas": [], "marcas": {}}
 
 
 def asociar(trabajo: dict, novedades, avisos_lg) -> None:
@@ -482,6 +483,26 @@ def quitar_asociacion(trabajo: dict, i: int) -> None:
 
 def recuperar(trabajo: dict, novedad: int) -> None:
     trabajo["descartadas"] = [k for k in trabajo["descartadas"] if k != novedad]
+
+
+# Marcas: resaltan en el Excel final la fila donde termina la novedad (en «Asociaciones» si está
+# asociada, en «PCZ sin asociar» si no). La naranja pesa más que la amarilla.
+COLORES_MARCA = {"amarilla": "FFFF00", "naranja": "FFC000"}
+
+
+def marcar(trabajo: dict, novedad: int, color: str) -> None:
+    """Pone la marca de ese color; si ya la tenía, la saca."""
+    marcas = trabajo.setdefault("marcas", {})
+    if marcas.get(novedad) == color:
+        del marcas[novedad]
+    else:
+        marcas[novedad] = color
+
+
+def marca(trabajo: dict, novedades) -> str | None:
+    """Marca de una fila con estas novedades: naranja si alguna es naranja, si no amarilla, si no None."""
+    colores = {trabajo.get("marcas", {}).get(k) for k in novedades}
+    return next((c for c in ("naranja", "amarilla") if c in colores), None)
 
 
 def asociacion_de(trabajo: dict) -> dict[int, int]:
@@ -567,15 +588,19 @@ def _juntar(valores) -> str:
     return " | ".join(dict.fromkeys(v for v in (_texto_celda(x) for x in valores) if v))
 
 
+def _en_orden(trabajo: dict) -> list[dict]:
+    """Asociaciones en el orden de PCZ (el de las filas de la hoja «Asociaciones»)."""
+    return sorted(trabajo["asociaciones"], key=lambda g: (min(g["novedades"]), g["novedades"]))
+
+
 def tabla_asociaciones(lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, numero_inicial: int = 1) -> pd.DataFrame:
     """Hoja «Asociaciones»: una fila por asociación, con la estructura fija de COLUMNAS_SALIDA.
 
     Las asociaciones van en el orden de PCZ. Si una asociación une varias novedades, sus N° se
     juntan con « | ». Las columnas sin dato quedan vacías.
     """
-    orden = sorted(trabajo["asociaciones"], key=lambda g: (min(g["novedades"]), g["novedades"]))
     filas = []
-    for n, g in enumerate(orden):
+    for n, g in enumerate(_en_orden(trabajo)):
         novs = list(g["novedades"])
         claves = [(i, j) for i, j in _claves(g["avisos"]) if i in lg.index and j < len(lg.loc[i, "avisos"])]
         fechas = [pcz.loc[k, "fecha"] for k in novs if pcz.loc[k, "fecha"] is not None]
@@ -613,9 +638,12 @@ def lg_sin_asociar(lg_original: pd.DataFrame, lg: pd.DataFrame, trabajo: dict, m
 
 def pcz_sin_asociar(pcz_original: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict) -> pd.DataFrame:
     """Novedades de PCZ que no están en ninguna asociación (descartadas o sin revisar)."""
+    return _fechas_sin_hora(pcz_original.iloc[_quedan(pcz, trabajo)].copy())
+
+
+def _quedan(pcz: pd.DataFrame, trabajo: dict) -> list[int]:
     asociadas = asociacion_de(trabajo)
-    quedan = [k for k in range(len(pcz)) if k not in asociadas]
-    return _fechas_sin_hora(pcz_original.iloc[quedan].copy())
+    return [k for k in range(len(pcz)) if k not in asociadas]
 
 
 def _sin_hora(v):
@@ -640,6 +668,11 @@ def exportar(lg_original: pd.DataFrame, pcz_original: pd.DataFrame, lg: pd.DataF
         "PCZ sin asociar": pcz_sin_asociar(pcz_original, pcz, trabajo),
         "LG sin asociar": lg_sin_asociar(lg_original, lg, trabajo, mapa_lg),
     }
+    # Color de cada fila (en el orden de la hoja) según las marcas de sus novedades
+    colores = {
+        "Asociaciones": [marca(trabajo, g["novedades"]) for g in _en_orden(trabajo)],
+        "PCZ sin asociar": [marca(trabajo, [k]) for k in _quedan(pcz, trabajo)],
+    }
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl", date_format="DD/MM/YYYY",
                         datetime_format="DD/MM/YYYY HH:MM") as w:
@@ -653,6 +686,10 @@ def exportar(lg_original: pd.DataFrame, pcz_original: pd.DataFrame, lg: pd.DataF
                         celda.number_format = FORMATO_FECHA if nombre == "Asociaciones" else "DD/MM/YYYY"
                     elif isinstance(celda.value, str) and "\n" in celda.value:
                         celda.alignment = Alignment(wrap_text=True, vertical="top")
+            for n, color in enumerate(colores.get(nombre, []), start=2):
+                if color:
+                    for celda in hoja[n]:
+                        celda.fill = PatternFill("solid", fgColor=COLORES_MARCA[color])
             for col in hoja.columns:
                 largo = max((len(renglon) for c in col if c.value is not None
                              for renglon in str(c.value).split("\n")), default=8)
