@@ -22,8 +22,8 @@ En la compu del trabajo **no se usa `.venv`**: se abre con `py -3.13 -m streamli
 
 ## Módulo: Asociación LG ↔ PCZ
 
-Sirve para asociar cada fila del **Libro de Guardia (LG)** con la(s) novedad(es) del **PCZ** que le
-corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: no usa IA ni internet.
+Sirve para asociar las novedades del **PCZ** con los avisos del **Libro de Guardia (LG)** que les
+corresponden, día por día. La app propone candidatos y vos elegís. Todo corre en tu compu: no usa IA ni internet.
 
 **Archivos que necesita** (las columnas pueden llamarse como sea: al cargar elegís cuál es cada dato):
 - **LG**: Fecha y Transcripción (cada fila es un párrafo; cada renglón es un aviso) y, si hay, Hora.
@@ -31,44 +31,52 @@ corresponden. La app propone candidatos y vos elegís. Todo corre en tu compu: n
 - **N° Novedad** es lo que identifica cada novedad. En la hoja `Asociaciones`, si una asociación tiene
   varias novedades, sus N° se juntan en la misma celda separados por ` | `. Si el archivo no tiene esa
   columna, se puede usar el número de fila del Excel.
-- **Hora** (LG y PCZ, opcional): suma puntos a las novedades con hora cercana a la del aviso, además
+- **Hora** (LG y PCZ, opcional): suma puntos a los avisos con hora cercana a la de la novedad, además
   de las horas escritas dentro de los textos.
 
 **Pasos**
 1. **Carga**: subí los dos Excel y, debajo de cada uno, elegí qué columna es cada dato (si se llaman
    como siempre, ya vienen elegidas). La vista previa muestra cómo entiende la app cada fecha. Las
    filas con fecha que no se entiende se listan (no se descartan).
-2. **Asociación**: la app recorre LG fila por fila. Arriba están Anterior / Siguiente y el progreso.
-   La fila se ve como una tabla: a la izquierda los avisos del Libro de Guardia y a la derecha, en la
-   misma línea, las novedades de PCZ asociadas (o "pendiente" / "descartado"). Se trabaja en dos pasos:
-   - **① Elegí los avisos**: tocás una o varias tarjetas de avisos y "Elegir novedades", o
-     **🗑️ Descartar** si no tienen novedad en PCZ (se puede deshacer con "↩️ Recuperar"). Si la fila
-     tiene un solo aviso sin resolver, este paso se saltea.
-   - **② Elegí las novedades de PCZ**: abajo aparecen **solo las novedades con la misma fecha**,
-     ordenadas por parecido con los avisos elegidos (números compartidos como señal/cambio/km/tren
-     = 3 puntos, palabras compartidas = 1, hora cercana = hasta 3), con las coincidencias en amarillo.
-     Las que tildás aparecen a la derecha de la "nueva asociación"; después tocás **Asociar**.
-   - Cada asociación se guarda al instante (se puede quitar o deshacer). Cuando todos los avisos de
-     la fila están asociados o descartados, pasa sola a la siguiente; si quedan, vuelve al paso ①.
-   - Abajo: Deshacer, "Ir a…" (fila o próxima pendiente) y la ayuda de atajos.
-   - Se muestran primero las 15 novedades con mejor puntaje; con "Mostrar 15 más" o "Mostrar todas"
-     aparecen las demás (el buscador busca siempre entre todas).
-   - Avisos y novedades se muestran como tarjetas: un clic en cualquier parte de la tarjeta la
+2. **Asociación**: la app recorre **los días del PCZ** (del más viejo al más nuevo). En cada día se
+   ven **todas las novedades de PCZ de ese día** como una tabla: a la izquierda las novedades y a la
+   derecha, en la misma línea, los avisos del LG asociados. Se trabaja en dos pasos:
+   - **① Elegí las novedades de PCZ**: tildás una o varias (se unen en una misma asociación) y
+     "Elegir avisos del LG", o **🗑️ Descartar** si no tienen nada en el LG. Si el día tiene una sola
+     novedad, este paso se saltea.
+   - **② Elegí los avisos del LG**: abajo aparecen **solo los avisos del LG de ese día** (cada renglón
+     de una transcripción es un aviso), ordenados por parecido con las novedades elegidas (números
+     compartidos como señal/cambio/km/tren = 3 puntos, palabras compartidas = 1, hora cercana = hasta
+     3), con las coincidencias en amarillo. Los que tildás aparecen a la derecha; después tocás
+     **Asociar**.
+   - Lo ya resuelto **sigue a la vista en gris** hasta cambiar de día: las asociadas con sus avisos al
+     lado ("🗑️ Quitar asociación" para deshacerla) y las descartadas solas ("↩️ Recuperar").
+     Cuando no queda nada pendiente en el día, pasa solo al siguiente; en el último día el botón de
+     arriba es "📥 Exportar".
+   - Se muestran primero los 15 avisos con mejor puntaje; con "Mostrar 15 más" o "Mostrar todos"
+     aparecen los demás (el buscador busca siempre entre todos).
+   - Novedades y avisos se muestran como tarjetas: un clic en cualquier parte de la tarjeta la
      tilda o destilda (las elegidas se pintan de color).
-   - Atajos: **1–9** tildar aviso (paso ①) o novedad (paso ②) · **Enter** pasar al paso ② / asociar ·
-     **D** descartar · **← →** fila anterior/siguiente.
-   - "Ver también día anterior / siguiente" (apagado por defecto) agrega esas novedades marcadas como
+   - Atajos: **1–9** tildar novedad (paso ①) o aviso (paso ②) · **Enter** pasar al paso ② / asociar ·
+     **D** descartar · **← →** día anterior/siguiente.
+   - "Ver también día anterior / siguiente" (apagado por defecto) agrega esos avisos marcados como
      **OTRO DÍA**, para eventos que cruzan la medianoche.
-   - Las novedades ya asociadas a otra fila se marcan en azul; se pueden elegir igual (con aviso).
+   - Un aviso ya usado en otra asociación se puede elegir igual: se marca "ya asociado a N° …".
 3. **Exportar**: descarga un Excel nuevo con 3 hojas:
-   - **Asociaciones**: una fila por asociación. Las columnas y su orden se eligen en un menú antes de
-     descargar (cualquier columna de LG o de PCZ, más "Descripción combinada" = descripción PCZ +
-     texto LG en minúsculas, para la tabla de eventos RAMS, y "Fila LG"). La transcripción de LG trae
-     solo los avisos de esa asociación y, si hay varios avisos o varias novedades, los valores se
-     juntan en la misma celda separados por ` | `.
-   - **LG sin asociar**: los avisos que no quedaron en ninguna asociación (descartados o sin revisar),
-     con las mismas columnas del Excel de LG.
-   - **PCZ sin asociar**: las novedades que no se usaron, con las mismas columnas del Excel de PCZ.
+   - **Asociaciones**: una fila por asociación (las novedades unidas de PCZ con sus avisos del LG),
+     con una **estructura fija** igual a la tabla madre, para copiar las filas y pegarlas a continuación:
+     N° · ID · Fecha · Mes · N° Novedad · Sistema · Subsistema · Parte · Elemento · Nombre correcto ·
+     Km. INPAN · BuscarV (Km. INPAN) · Modelo · Descripción.
+     - **N°**: consecutivo; el de la primera fila se escribe en pantalla y sube de a uno hacia abajo.
+     - **Fecha**: la de la novedad de PCZ, con formato 19/9/2026.
+     - **N° Novedad**: el de PCZ (si se unieron varias, separados por ` | `).
+     - **Descripción**: el texto de PCZ en MAYÚSCULAS, un renglón vacío y debajo el texto de los avisos
+       del LG tal como viene (cada uno en su renglón).
+     - ID, Mes, Sistema, Subsistema, Parte, Elemento, Nombre correcto, Km. INPAN, BuscarV y Modelo
+       van **vacías**, para completarlas después.
+   - **PCZ sin asociar**: las novedades descartadas o sin revisar, con las columnas del Excel de PCZ.
+   - **LG sin asociar**: los avisos que no quedaron en ninguna asociación, con las columnas del Excel
+     de LG.
 
 **El progreso no se guarda**: lo asociado vive solo mientras la app está abierta. Si cerrás la app,
 recargás la página o cargás otros archivos, se empieza de cero. Antes de cerrar, descargá el Excel en

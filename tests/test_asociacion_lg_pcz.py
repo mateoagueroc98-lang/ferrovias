@@ -132,11 +132,13 @@ def test_resaltar_escapa_html():
 
 
 def test_candidatos_ordenados_y_todos_visibles():
-    lg = pd.Series({"fecha": F(2025, 3, 5), "hora": None, "texto": "señal d"})
-    pcz = _pcz()
-    pcz.loc[3, "descripcion"] = "señal"
-    c = a.candidatos(lg, pcz)
-    assert list(c["id"]) == ["4", "2"]  # se muestran todos los del día, el mejor primero
+    lg = pd.DataFrame({"fecha": [F(2025, 3, 5), F(2025, 3, 5), F(2025, 3, 4)], "hora": [None] * 3,
+                       "avisos": [["Tren 3101 demorado"], ["Falla señal 14", "Cambio 7"], ["Señal 14"]]})
+    avisos = a.tabla_avisos(lg)
+    assert list(avisos["clave"]) == ["0:0", "1:0", "1:1", "2:0"]
+    nov = pd.Series({"fecha": F(2025, 3, 5), "hora": None, "descripcion": "Señal 14 a peligro"})
+    c = a.candidatos(nov, avisos)
+    assert list(c["clave"]) == ["1:0", "0:0", "1:1"]  # todos los avisos del día, el mejor primero
 
 
 # ---------------------------------------- deshacer, progreso y exportación
@@ -154,31 +156,45 @@ def test_ejemplos_fechas_mezcladas(tmp_path):
     assert lg["fecha"].notna().all()
     assert set(lg["fecha"]) == {F(2025, 3, 4), F(2025, 3, 5), F(2025, 3, 6)}
     assert pcz["fecha"].isna().sum() == 1  # la "32/13/2025"
-    # El mejor candidato de la fila 4 (E712, Márquez) es la novedad 1014
-    assert a.candidatos(lg.loc[3], pcz).iloc[0]["id"] == "1014"
+    # Para la novedad 1014 (E-712, Márquez), el mejor aviso es el de la fila 4 de LG
+    nov = pcz[pcz["id"] == "1014"].iloc[0]
+    assert a.candidatos(nov, a.tabla_avisos(lg)).iloc[0]["clave"] == "3:0"
 
 
-def test_deshacer_y_progreso():
-    s = a.trabajo_nuevo("h", 3)
-    n_avisos = [2, 1, 1]
-    a.registrar(s, 0, [{"avisos": [0], "novedades": ["1", "2"]}], descartados=[1])
-    a.registrar(s, 1, [], descartados=[0])
-    assert a.progreso(s, n_avisos) == {"avisos": 4, "asociados": 1, "descartados": 2, "pendientes": 1,
-                                       "asociaciones": 1}
-    assert a.siguiente_pendiente(s, 0, n_avisos) == 2
-    assert a.deshacer(s) == 1
-    assert s["filas"]["1"] == {"grupos": [], "descartados": []}
-    assert a.siguiente_pendiente(s, 0, n_avisos) == 1
+def test_dias_estado_y_progreso():
+    pcz = pd.DataFrame({"fecha": [F(2025, 3, 5), F(2025, 3, 4), F(2025, 3, 5), None]})
+    assert a.dias_pcz(pcz) == [F(2025, 3, 4), F(2025, 3, 5), None]
+    assert a.novedades_del_dia(pcz, F(2025, 3, 5)) == [0, 2] and a.novedades_del_dia(pcz, None) == [3]
+    s = a.trabajo_nuevo("h")
+    a.asociar(s, [0, 2], ["0:0", "1:1"])
+    a.descartar(s, [1])
+    assert [a.estado(s, k) for k in range(4)] == ["asociada", "descartada", "asociada", "pendiente"]
+    assert a.progreso(s, 4) == {"total": 4, "asociadas": 2, "descartadas": 1, "pendientes": 1}
+    assert a.pendientes(s, [0, 1, 2, 3]) == [3]
+    assert a.novedades_por_aviso(s) == {"0:0": [0, 2], "1:1": [0, 2]}
+    a.recuperar(s, 1); a.quitar_asociacion(s, 0)
+    assert a.pendientes(s, [0, 1, 2, 3]) == [0, 1, 2, 3]
 
 
-def _trabajo_ejemplo(lg):
-    s = a.trabajo_nuevo("h", len(lg))
-    # Fila 1 (2 avisos): los dos avisos -> 1001 y 1002 en una sola asociación
-    a.registrar(s, 0, [{"avisos": [0, 1], "novedades": ["1001", "1002"]}], [])
-    # Fila 2 (2 avisos): aviso 1 -> 1003; el aviso 2 queda sin asociar
-    a.registrar(s, 1, [{"avisos": [0], "novedades": ["1003"]}], [])
-    # Fila 5: dos asociaciones distintas (1022 y, aparte, 1002 que ya estaba en la fila 1)
-    a.registrar(s, 4, [{"avisos": [0], "novedades": ["1022"]}, {"avisos": [1], "novedades": ["1002"]}], [])
+def test_novedades_unidas_puntuan_juntas():
+    pcz = pd.DataFrame({"fecha": [F(2025, 3, 4)] * 2, "descripcion": ["Señal 14", "Boulogne"],
+                        "hora": [None, 8 * 60 + 10]})
+    nov = a.novedad_combinada(pcz, [0, 1])
+    assert nov["descripcion"] == "Señal 14 Boulogne" and nov["hora"] == [8 * 60 + 10]
+    lg = pd.DataFrame({"fecha": [F(2025, 3, 4)] * 2, "hora": [8 * 60 + 15, None],
+                       "avisos": [["Falla señal 14 Boulogne"], ["Cambio 7"]]})
+    c = a.candidatos(nov, a.tabla_avisos(lg))
+    assert list(c["clave"]) == ["0:0", "1:0"] and "hora a 5 min" in c.iloc[0]["detalle"]
+
+
+def _trabajo_ejemplo(pcz):
+    s = a.trabajo_nuevo("h")
+    pos = {n: k for k, n in enumerate(pcz["id"])}
+    # 1001 y 1002 unidas con los dos avisos de la fila 1 de LG
+    a.asociar(s, [pos["1001"], pos["1002"]], ["0:0", "0:1"])
+    a.asociar(s, [pos["1003"]], ["1:0"])          # 1003: aviso 1 de la fila 2
+    a.asociar(s, [pos["1022"]], ["4:0", "0:0"])   # 1022: avisos de las filas 5 y 1
+    a.descartar(s, [pos["1004"]])
     return s
 
 
@@ -186,62 +202,67 @@ MAPA_LG = {"Fecha": "Fecha", "Hora": "Hora", "Transcripción": "Transcripcion"}
 MAPA_PCZ = {"Fecha": "Fecha", "Descripción": "Descripcion", "N° Novedad": "Nº Novedad", "Hora": "Hora"}
 
 
-def test_columnas_por_defecto_y_disponibles(tmp_path):
-    lg_df, pcz_df, _, _ = _cargar_ejemplos(tmp_path)
-    defecto = a.columnas_por_defecto(MAPA_LG, MAPA_PCZ)
-    assert defecto == ["LG · Fecha", "LG · Hora", "LG · Transcripcion", "PCZ · Nº Novedad",
-                       "PCZ · Descripcion", a.COMBINADA]
-    assert set(defecto) <= set(a.columnas_disponibles(lg_df, pcz_df))
+def test_estructura_fija_de_la_hoja_asociaciones():
+    assert list(a.COLUMNAS_SALIDA) == [
+        "N°", "ID", "Fecha", "Mes", "N° Novedad", "Sistema", "Subsistema", "Parte", "Elemento",
+        "Nombre correcto", "Km. INPAN", "BuscarV (Km. INPAN)", "Modelo", "Descripción"]
+    assert a.texto_descripcion(["Falla señal 14", "Normalizada"], ["Se informa falla.", "Se normaliza."]) == (
+        "FALLA SEÑAL 14\nNORMALIZADA\n\nSe informa falla.\nSe normaliza.")
 
 
-def test_tabla_asociaciones_junta_con_barra_y_respeta_orden(tmp_path):
-    lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
-    s = _trabajo_ejemplo(lg)
-    cols = [a.FILA_LG, "PCZ · Nº Novedad", "LG · Transcripcion", "PCZ · Descripcion", a.COMBINADA, "LG · Pagina"]
-    t = a.tabla_asociaciones(lg_df, pcz_df, lg, pcz, s, MAPA_LG, MAPA_PCZ, cols)
-    assert list(t.columns) == cols and len(t) == 4  # una fila por asociación
-    f = t.iloc[0]
-    assert f[a.FILA_LG] == 1 and f["PCZ · Nº Novedad"] == "1001 | 1002" and f["LG · Pagina"] == 12
-    assert f["LG · Transcripcion"] == ("Se informa falla en señal 14 de estación Boulogne, concurre mecánico "
-                                       "Pérez. | Se normaliza señal 14 a las 9:10 hs.")
-    assert f["PCZ · Descripcion"] == "Falla señal 14 Boulogne, a peligro 08:10 hs | Señal 14 Boulogne normalizada 09:12"
-    assert f[a.COMBINADA] == (f["PCZ · Descripcion"] + " " + f["LG · Transcripcion"].lower())
-    assert t.iloc[1]["LG · Transcripcion"] == "Brazo del P.A.N. calle Sarmiento no baja, interviene Gómez."
+def test_tabla_asociaciones_una_fila_por_asociacion(tmp_path):
+    _, _, lg, pcz = _cargar_ejemplos(tmp_path)
+    s = _trabajo_ejemplo(pcz)
+    t = a.tabla_asociaciones(lg, pcz, s, numero_inicial=120)
+    assert list(t.columns) == list(a.COLUMNAS_SALIDA) and len(t) == 3
+    assert list(t["N°"]) == [120, 121, 122]  # consecutivo desde el número elegido
+    vacias = [c for c, uso in a.COLUMNAS_SALIDA.items() if uso is None]
+    assert t[vacias].isna().all().all()
+    f = t.iloc[0]  # 1001 + 1002 unidas
+    assert f["N° Novedad"] == "1001 | 1002" and f["Fecha"] == F(2025, 3, 4)
+    assert f["Descripción"] == ("FALLA SEÑAL 14 BOULOGNE, A PELIGRO 08:10 HS\nSEÑAL 14 BOULOGNE NORMALIZADA 09:12\n\n"
+                                "Se informa falla en señal 14 de estación Boulogne, concurre mecánico Pérez.\n"
+                                "Se normaliza señal 14 a las 9:10 hs.")
+    assert t.iloc[1]["N° Novedad"] == 1003  # una sola novedad: número
 
 
 def test_sin_asociar_conserva_columnas_originales(tmp_path):
     lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
-    s = _trabajo_ejemplo(lg)
+    s = _trabajo_ejemplo(pcz)
     lgs = a.lg_sin_asociar(lg_df, lg, s, MAPA_LG)
     assert list(lgs.columns) == list(lg_df.columns)
-    # fila 2 (solo su aviso 2), filas 3 y 4 enteras; fila 1 y 5 están completas
-    assert list(lgs["Pagina"]) == [12, 13, 13]
+    # fila 1 completa; fila 2 solo su aviso 2; filas 3 y 4 enteras; fila 5 solo su aviso 2
+    assert list(lgs["Pagina"]) == [12, 13, 13, 14]
     assert lgs.iloc[0]["Transcripcion"] == "Cambio 7 sin comprobación en Villa Adelina, se ajusta."
-    assert lgs.iloc[1]["Transcripcion"] == lg_df.iloc[2]["Transcripcion"]
+    assert lgs.iloc[3]["Transcripcion"] == "Se normaliza a las 7:05."
     pzs = a.pcz_sin_asociar(pcz_df, pcz, s)
     assert list(pzs.columns) == list(pcz_df.columns)
-    assert len(pzs) == len(pcz_df) - 4 and not {1001, 1002, 1003, 1022} & set(pzs["Nº Novedad"])
+    assert len(pzs) == len(pcz_df) - 4 and 1004 in set(pzs["Nº Novedad"])  # la descartada también
 
 
 def test_exportar_tres_hojas(tmp_path):
     lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
-    s = _trabajo_ejemplo(lg)
-    cols = a.columnas_por_defecto(MAPA_LG, MAPA_PCZ)
-    hojas = pd.read_excel(io.BytesIO(a.exportar(lg_df, pcz_df, lg, pcz, s, MAPA_LG, MAPA_PCZ, cols)),
-                          sheet_name=None)
-    assert list(hojas) == ["Asociaciones", "LG sin asociar", "PCZ sin asociar"]
-    assert list(hojas["Asociaciones"].columns) == cols and len(hojas["Asociaciones"]) == 4
-    assert len(hojas["LG sin asociar"]) == 3 and len(hojas["PCZ sin asociar"]) == len(pcz_df) - 4
+    s = _trabajo_ejemplo(pcz)
+    datos = a.exportar(lg_df, pcz_df, lg, pcz, s, MAPA_LG, numero_inicial=7)
+    hojas = pd.read_excel(io.BytesIO(datos), sheet_name=None)
+    assert list(hojas) == ["Asociaciones", "PCZ sin asociar", "LG sin asociar"]
+    assert list(hojas["Asociaciones"].columns) == list(a.COLUMNAS_SALIDA) and len(hojas["Asociaciones"]) == 3
+    assert len(hojas["LG sin asociar"]) == 4 and len(hojas["PCZ sin asociar"]) == len(pcz_df) - 4
+    # En el Excel: fecha real con formato d/m/aaaa y la descripción con «ajustar texto»
+    from openpyxl import load_workbook
+    hoja = load_workbook(io.BytesIO(datos))["Asociaciones"]
+    assert hoja["A2"].value == 7 and hoja["C2"].number_format == "d/m/yyyy"
+    assert hoja["C2"].value.date() == F(2025, 3, 4)
+    assert hoja["N2"].alignment.wrap_text and hoja["N2"].value.startswith("FALLA SEÑAL 14")
 
 
 # ------------------------------------------------ grupos aviso(s) -> novedad(es)
-def test_puntaje_solo_con_avisos_elegidos():
-    fila = pd.Series({"fecha": F(2025, 3, 4), "hora": None, "avisos": ["Señal 14 Boulogne", "Cambio 7 Villa Adelina"],
-                      "texto": "Señal 14 Boulogne Cambio 7 Villa Adelina"})
-    pcz = pd.DataFrame({"id": ["1", "2"], "descripcion": ["Señal 14 Boulogne", "Cambio 7 Villa Adelina"],
-                        "fecha": [F(2025, 3, 4)] * 2})
-    c = a.candidatos(a.fila_con_avisos(fila, [1]), pcz)
-    assert list(c["id"]) == ["2", "1"] and c.iloc[1]["puntaje"] == 0
+def test_puntaje_por_aviso_y_no_por_parrafo():
+    lg = pd.DataFrame({"fecha": [F(2025, 3, 4)], "hora": [None],
+                       "avisos": [["Señal 14 Boulogne", "Cambio 7 Villa Adelina"]]})
+    nov = pd.Series({"fecha": F(2025, 3, 4), "hora": None, "descripcion": "Cambio 7 Villa Adelina"})
+    c = a.candidatos(nov, a.tabla_avisos(lg))
+    assert list(c["clave"]) == ["0:1", "0:0"] and c.iloc[1]["puntaje"] == 0
 
 
 # ---------------------------------------------- columnas elegidas por el usuario
@@ -259,15 +280,10 @@ def test_preparar_pcz_con_columnas_de_otro_nombre():
     assert list(pcz["id"]) == ["7"] and pcz.loc[0, "fecha"] == F(2025, 3, 5)
 
 
-def test_filas_de_tabla_incluye_avisos_sin_asociar_en_orden():
-    grupos = [{"avisos": [2], "novedades": ["9"]}, {"avisos": [0], "novedades": ["5", "6"]}]
-    assert a.filas_de_tabla(grupos, 4, descartados=[3]) == [
-        {"avisos": [0], "novedades": ["5", "6"], "descartado": False},
-        {"avisos": [1], "novedades": [], "descartado": False},
-        {"avisos": [2], "novedades": ["9"], "descartado": False},
-        {"avisos": [3], "novedades": [], "descartado": True},
-    ]
-    assert a.filas_de_tabla([], 0) == []
+def test_buscar_en_avisos():
+    lg = pd.DataFrame({"fecha": [F(2025, 3, 4)], "hora": [None], "avisos": [["Señal 14 Boulogne", "Cambio 7"]]})
+    av = a.tabla_avisos(lg)
+    assert list(a.buscar(av, "senal boulogne")["clave"]) == ["0:0"]
 
 
 def test_preparar_pcz_sin_n_novedad_usa_fila_del_excel():
@@ -286,13 +302,16 @@ def test_hora_con_filas_vacias_se_muestra_bien():
     assert a.formatear_hora(510.0) == "08:30" and a.formatear_hora(float("nan")) == ""
 
 
-def test_hora_de_columna_pcz_suma_al_puntaje():
-    df = pd.DataFrame({"Descripción": ["Falla señal 14", "Falla señal 14"], "Fecha": ["04/03/2025"] * 2,
-                       "N° Novedad": [1, 2], "Hora": ["08:20", "15:00"]})
+def test_hora_de_columnas_suma_al_puntaje():
+    df = pd.DataFrame({"Descripción": ["Falla señal 14"], "Fecha": ["04/03/2025"], "N° Novedad": [1],
+                       "Hora": ["08:20"]})
     pcz = a.preparar_pcz(df, {"Descripción": "Descripción", "Fecha": "Fecha", "N° Novedad": "N° Novedad",
                               "Hora": "Hora"})
-    assert list(pcz["hora"]) == [8 * 60 + 20, 15 * 60]
-    lg = pd.Series({"fecha": F(2025, 3, 4), "hora": 8 * 60 + 15, "texto": "Falla señal 14"})
-    c = a.candidatos(lg, pcz)
-    assert list(c["id"]) == ["1", "2"]  # la de hora cercana primero
+    assert list(pcz["hora"]) == [8 * 60 + 20]
+    lg = pd.DataFrame({"fecha": [F(2025, 3, 4)] * 2, "hora": [8 * 60 + 15, 15 * 60],
+                       "avisos": [["Falla señal 14"], ["Falla señal 14"]]})
+    c = a.candidatos(pcz.iloc[0], a.tabla_avisos(lg))
+    assert list(c["clave"]) == ["0:0", "1:0"]  # el de hora cercana primero
     assert c.iloc[0]["puntaje"] == c.iloc[1]["puntaje"] + 3 and "hora a 5 min" in c.iloc[0]["detalle"]
+
+

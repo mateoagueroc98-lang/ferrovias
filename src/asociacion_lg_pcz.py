@@ -11,6 +11,7 @@ import re
 import unicodedata
 
 import pandas as pd
+from openpyxl.styles import Alignment
 
 # ------------------------------------------------------------------ columnas
 # Nombre canónico -> función que reconoce el encabezado ya normalizado
@@ -355,59 +356,83 @@ def ids_repetidos(pcz: pd.DataFrame) -> list[str]:
 
 
 # --------------------------------------------------------------- candidatos
-def filtrar_por_fecha(pcz: pd.DataFrame, fecha: dt.date | None, vecinos: bool = False) -> pd.DataFrame:
-    """Novedades de PCZ con la MISMA fecha (y, si vecinos=True, del día anterior/siguiente).
+# La novedad de PCZ es la principal: los candidatos son los avisos (renglones) del LG.
+def tabla_avisos(lg: pd.DataFrame) -> pd.DataFrame:
+    """Una fila por aviso del LG: fila de LG, n° de aviso, texto, fecha y hora de su párrafo."""
+    filas = [{"clave": f"{i}:{j}", "fila_lg": i, "aviso": j, "texto": texto,
+              "fecha": lg.loc[i, "fecha"], "hora": lg.loc[i, "hora"]}
+             for i in lg.index for j, texto in enumerate(lg.loc[i, "avisos"])]
+    t = pd.DataFrame(filas, columns=["clave", "fila_lg", "aviso", "texto", "fecha", "hora"])
+    t["hora"] = t["hora"].astype(object)
+    return t
+
+
+def filtrar_por_fecha(tabla: pd.DataFrame, fecha: dt.date | None, vecinos: bool = False) -> pd.DataFrame:
+    """Filas con la MISMA fecha (y, si vecinos=True, del día anterior/siguiente).
 
     Agrega la columna "otro_dia" (True para las del día anterior/siguiente).
-    Sin fecha válida en LG no hay candidatos por fecha.
+    Sin fecha válida no hay candidatos por fecha.
     """
     if fecha is None:
-        return pcz.iloc[0:0].assign(otro_dia=pd.Series(dtype=bool))
+        return tabla.iloc[0:0].assign(otro_dia=pd.Series(dtype=bool))
     dias = {fecha}
     if vecinos:
         dias |= {fecha - dt.timedelta(days=1), fecha + dt.timedelta(days=1)}
-    sel = pcz[pcz["fecha"].isin(dias)].copy()
+    sel = tabla[tabla["fecha"].isin(dias)].copy()
     sel["otro_dia"] = sel["fecha"] != fecha
     return sel
 
 
-def puntuar(fila_lg: pd.Series, sel: pd.DataFrame) -> pd.DataFrame:
-    """Agrega puntaje, detalle y coincidencias a cada novedad de `sel` (debe tener "otro_dia")."""
+def _horas(hora) -> list[int]:
+    if isinstance(hora, (list, tuple)):
+        return [int(h) for h in hora if h is not None and not pd.isna(h)]
+    return [int(hora)] if hora is not None and not pd.isna(hora) else []
+
+
+def novedad_combinada(pcz: pd.DataFrame, posiciones: list[int]) -> pd.Series:
+    """Varias novedades de PCZ unidas en una sola (para buscar sus avisos del LG juntos)."""
+    sel = pcz.iloc[list(posiciones)]
+    fechas = [f for f in sel["fecha"] if f is not None and not pd.isna(f)]
+    return pd.Series({"fecha": fechas[0] if fechas else None, "descripcion": " ".join(sel["descripcion"]),
+                      "hora": [h for h in sel["hora"] if h is not None and not pd.isna(h)]})
+
+
+def puntuar(novedad: pd.Series, sel: pd.DataFrame) -> pd.DataFrame:
+    """Agrega puntaje, detalle y coincidencias a cada aviso de `sel` (debe tener "otro_dia")."""
     sel = sel.copy()
-    horas_lg = [h for h in [fila_lg["hora"]] if h is not None and not pd.isna(h)]
-    horas_lg += [h for _, _, h in horas_en_texto(fila_lg["texto"])]
-    horas_pcz = sel["hora"] if "hora" in sel else pd.Series([None] * len(sel), index=sel.index)
-    resultados = [similitud(fila_lg["texto"], horas_lg, d, [h] if h is not None and not pd.isna(h) else [])
-                  for d, h in zip(sel["descripcion"], horas_pcz)]
+    resultados = [
+        similitud(texto, _horas(hora) + [h for _, _, h in horas_en_texto(texto)],
+                  novedad["descripcion"], _horas(novedad["hora"]))
+        for texto, hora in zip(sel["texto"], sel["hora"])
+    ]
     sel["puntaje"] = [r["puntaje"] for r in resultados]
     sel["detalle"] = [r["detalle"] for r in resultados]
     sel["comunes"] = [r["comunes"] for r in resultados]
     sel["hora_suma"] = [r["dif_hora"] is not None and puntos_hora(r["dif_hora"]) > 0 for r in resultados]
-    sel["fila_pcz"] = sel.index
-    return sel.sort_values(["otro_dia", "puntaje", "fila_pcz"], ascending=[True, False, True])
+    return sel.sort_values(["otro_dia", "puntaje", "fila_lg", "aviso"], ascending=[True, False, True, True])
 
 
-def candidatos(fila_lg: pd.Series, pcz: pd.DataFrame, vecinos: bool = False) -> pd.DataFrame:
-    """Candidatos ordenados: primero los de la misma fecha, de mayor a menor puntaje."""
-    return puntuar(fila_lg, filtrar_por_fecha(pcz, fila_lg["fecha"], vecinos))
+def candidatos(novedad: pd.Series, avisos_lg: pd.DataFrame, vecinos: bool = False) -> pd.DataFrame:
+    """Avisos del LG candidatos: primero los de la misma fecha, de mayor a menor puntaje."""
+    return puntuar(novedad, filtrar_por_fecha(avisos_lg, novedad["fecha"], vecinos))
 
 
-def pcz_sin_fecha(fila_lg: pd.Series, pcz: pd.DataFrame) -> pd.DataFrame:
-    """Novedades de PCZ cuya fecha no se pudo interpretar (pueden ser de cualquier día)."""
-    return puntuar(fila_lg, pcz[pcz["fecha"].isna()].assign(otro_dia=True))
+def avisos_sin_fecha(novedad: pd.Series, avisos_lg: pd.DataFrame) -> pd.DataFrame:
+    """Avisos del LG cuya fecha no se pudo interpretar (pueden ser de cualquier día)."""
+    return puntuar(novedad, avisos_lg[avisos_lg["fecha"].isna()].assign(otro_dia=True))
 
 
-def todas_las_novedades(fila_lg: pd.Series, pcz: pd.DataFrame) -> pd.DataFrame:
-    """Todas las novedades puntuadas (para filas de LG sin fecha válida)."""
-    return puntuar(fila_lg, pcz.assign(otro_dia=True))
+def todos_los_avisos(novedad: pd.Series, avisos_lg: pd.DataFrame) -> pd.DataFrame:
+    """Todos los avisos puntuados (para novedades de PCZ sin fecha válida)."""
+    return puntuar(novedad, avisos_lg.assign(otro_dia=True))
 
 
 def buscar(cands: pd.DataFrame, texto: str) -> pd.DataFrame:
-    """Filtra candidatos que contengan todas las palabras buscadas (sin tildes/mayúsculas)."""
+    """Filtra avisos que contengan todas las palabras buscadas (sin tildes/mayúsculas)."""
     palabras = sin_tildes(texto).split()
     if not palabras:
         return cands
-    base = (cands["id"] + " " + cands["descripcion"]).map(sin_tildes)
+    base = cands["texto"].map(sin_tildes)
     return cands[base.map(lambda b: all(p in b for p in palabras))]
 
 
@@ -420,110 +445,97 @@ def huella(*contenidos: bytes) -> str:
     return h.hexdigest()[:16]
 
 
-def trabajo_nuevo(huella_archivos: str, n_lg: int) -> dict:
+def dias_pcz(pcz: pd.DataFrame) -> list:
+    """Días a recorrer (todas las fechas de PCZ, en orden); al final None si hay fechas inválidas."""
+    dias = sorted({f for f in pcz["fecha"] if f is not None and not pd.isna(f)})
+    return dias + ([None] if pcz["fecha"].isna().any() else [])
+
+
+def novedades_del_dia(pcz: pd.DataFrame, dia) -> list[int]:
+    """Posiciones de las novedades de PCZ de ese día (dia=None: las de fecha inválida)."""
+    if dia is None:
+        return [k for k, f in enumerate(pcz["fecha"]) if f is None or pd.isna(f)]
+    return [k for k, f in enumerate(pcz["fecha"]) if f == dia]
+
+
+def trabajo_nuevo(huella_archivos: str) -> dict:
     """Estado del trabajo de asociación. Vive solo en memoria mientras la app está abierta.
 
-    Por cada fila de LG: las asociaciones hechas (grupos de avisos -> novedades) y los avisos
-    descartados (los que no tienen novedad en PCZ).
+    asociaciones: [{"novedades": [posición en PCZ], "avisos": ["fila:aviso" del LG]}]
+    descartadas: novedades de PCZ sin aviso en el LG.
     """
-    return {
-        "huella": huella_archivos,
-        "posicion": 0,
-        "filas": {str(i): {"grupos": [], "descartados": []} for i in range(n_lg)},
-        "historial": [],
-    }
+    return {"huella": huella_archivos, "dia": 0, "asociaciones": [], "descartadas": []}
 
 
-def registrar(trabajo: dict, fila: int, grupos: list[dict], descartados) -> None:
-    """Guarda cómo queda una fila (y lo anterior en el historial, para Deshacer)."""
-    clave = str(fila)
-    trabajo["historial"].append({"fila": fila, "antes": trabajo["filas"][clave]})
-    trabajo["historial"] = trabajo["historial"][-300:]
-    trabajo["filas"][clave] = {
-        "grupos": [{"avisos": sorted(g["avisos"]), "novedades": list(dict.fromkeys(g["novedades"]))}
-                   for g in grupos],
-        "descartados": sorted(set(descartados)),
-    }
+def asociar(trabajo: dict, novedades, avisos_lg) -> None:
+    trabajo["asociaciones"].append({"novedades": sorted(set(novedades)), "avisos": list(dict.fromkeys(avisos_lg))})
+    trabajo["descartadas"] = [k for k in trabajo["descartadas"] if k not in set(novedades)]
 
 
-def deshacer(trabajo: dict) -> int | None:
-    """Revierte el último cambio. Devuelve la fila afectada (o None si no hay nada)."""
-    if not trabajo["historial"]:
-        return None
-    ultimo = trabajo["historial"].pop()
-    trabajo["filas"][str(ultimo["fila"])] = ultimo["antes"]
-    trabajo["posicion"] = ultimo["fila"]
-    return ultimo["fila"]
+def descartar(trabajo: dict, novedades) -> None:
+    trabajo["descartadas"] = sorted(set(trabajo["descartadas"]) | set(novedades))
 
 
-def avisos_cubiertos(grupos: list[dict]) -> set[int]:
-    return {i for g in grupos for i in g["avisos"]}
+def quitar_asociacion(trabajo: dict, i: int) -> None:
+    del trabajo["asociaciones"][i]
 
 
-def pendientes_de_fila(d: dict, n_avisos: int) -> list[int]:
-    """Avisos de la fila que todavía no están asociados ni descartados."""
-    resueltos = avisos_cubiertos(d["grupos"]) | set(d["descartados"])
-    return [i for i in range(n_avisos) if i not in resueltos]
+def recuperar(trabajo: dict, novedad: int) -> None:
+    trabajo["descartadas"] = [k for k in trabajo["descartadas"] if k != novedad]
 
 
-def filas_de_tabla(grupos: list[dict], n_avisos: int, descartados=()) -> list[dict]:
-    """Filas para mostrar LG (izquierda) ↔ PCZ (derecha), en el orden de los avisos.
-
-    Cada asociación es una fila; cada aviso descartado o pendiente es una fila sin novedades.
-    """
-    filas = [{**g, "descartado": False} for g in grupos]
-    cubiertos = avisos_cubiertos(grupos)
-    filas += [{"avisos": [i], "novedades": [], "descartado": i in descartados}
-              for i in range(n_avisos) if i not in cubiertos]
-    return sorted(filas, key=lambda f: (min(f["avisos"], default=-1), len(f["novedades"]) == 0))
+def asociacion_de(trabajo: dict) -> dict[int, int]:
+    """Novedad de PCZ (posición) -> índice de la asociación en la que está."""
+    return {k: i for i, g in enumerate(trabajo["asociaciones"]) for k in g["novedades"]}
 
 
-def fila_con_avisos(fila_lg: pd.Series, renglones: list[int]) -> pd.Series:
-    """Copia de la fila de LG cuyo texto son solo los avisos elegidos (para puntuar)."""
-    elegidos = [fila_lg["avisos"][i] for i in renglones if 0 <= i < len(fila_lg["avisos"])]
-    fila = fila_lg.copy()
-    if elegidos:
-        fila["texto"] = " ".join(elegidos)
-    return fila
+def estado(trabajo: dict, novedad: int) -> str:
+    if novedad in asociacion_de(trabajo):
+        return "asociada"
+    return "descartada" if novedad in trabajo["descartadas"] else "pendiente"
 
 
-def asociaciones_por_novedad(trabajo: dict) -> dict[str, list[int]]:
-    """id de novedad -> filas de LG (0-based) en las que está asociada."""
-    salida: dict[str, set[int]] = {}
-    for fila, d in trabajo["filas"].items():
-        for g in d["grupos"]:
-            for n in g["novedades"]:
-                salida.setdefault(n, set()).add(int(fila))
-    return {n: sorted(f) for n, f in salida.items()}
+def novedades_por_aviso(trabajo: dict) -> dict[str, list[int]]:
+    """Clave de aviso ("fila:aviso") -> novedades de PCZ (posición) a las que está asociado."""
+    salida: dict[str, list[int]] = {}
+    for g in trabajo["asociaciones"]:
+        for clave in g["avisos"]:
+            salida.setdefault(clave, []).extend(g["novedades"])
+    return salida
 
 
-def progreso(trabajo: dict, n_avisos: list[int]) -> dict:
-    """Avisos asociados / descartados / pendientes, y cantidad de asociaciones."""
-    asociados = descartados = pendientes = asociaciones = 0
-    for i, n in enumerate(n_avisos):
-        d = trabajo["filas"][str(i)]
-        cubiertos = avisos_cubiertos(d["grupos"])
-        asociados += len(cubiertos)
-        descartados += len(set(d["descartados"]) - cubiertos)
-        pendientes += len(pendientes_de_fila(d, n))
-        asociaciones += len(d["grupos"])
-    return {"avisos": sum(n_avisos), "asociados": asociados, "descartados": descartados,
-            "pendientes": pendientes, "asociaciones": asociaciones}
+def progreso(trabajo: dict, n_pcz: int) -> dict:
+    asociadas = set(asociacion_de(trabajo))
+    descartadas = set(trabajo["descartadas"]) - asociadas
+    return {"total": n_pcz, "asociadas": len(asociadas), "descartadas": len(descartadas),
+            "pendientes": n_pcz - len(asociadas) - len(descartadas)}
 
 
-def siguiente_pendiente(trabajo: dict, desde: int, n_avisos: list[int]) -> int | None:
-    """Próxima fila (dando la vuelta) que tiene avisos sin asociar ni descartar."""
-    n = len(n_avisos)
-    for k in range(1, n + 1):
-        i = (desde + k) % n
-        if pendientes_de_fila(trabajo["filas"][str(i)], n_avisos[i]):
-            return i
-    return None
+def pendientes(trabajo: dict, novedades: list[int]) -> list[int]:
+    hechas = set(asociacion_de(trabajo)) | set(trabajo["descartadas"])
+    return [k for k in novedades if k not in hechas]
 
 
 # --------------------------------------------------------------- exportar
-COMBINADA = "Descripción combinada"
-FILA_LG = "Fila LG"
+# Hoja «Asociaciones»: estructura fija, igual a la tabla madre del usuario (para copiar y pegar a
+# continuación). Las columnas vacías se completan después a mano.
+COLUMNAS_SALIDA = {
+    "N°": "Número consecutivo: arranca en el número que elijas y sube de a uno.",
+    "ID": None,
+    "Fecha": "Fecha de la novedad de PCZ (formato 19/9/2026).",
+    "Mes": None,
+    "N° Novedad": "Número de la novedad de PCZ (si se unieron varias: «1001 | 1002»).",
+    "Sistema": None,
+    "Subsistema": None,
+    "Parte": None,
+    "Elemento": None,
+    "Nombre correcto": None,
+    "Km. INPAN": None,
+    "BuscarV (Km. INPAN)": None,
+    "Modelo": None,
+    "Descripción": "Texto de PCZ en MAYÚSCULAS, un renglón vacío y abajo el texto del LG tal como viene.",
+}
+FORMATO_FECHA = "d/m/yyyy"
 
 
 def _texto_celda(v) -> str:
@@ -541,79 +553,68 @@ def _texto_celda(v) -> str:
     return str(v).strip()
 
 
-def columnas_disponibles(lg_original: pd.DataFrame, pcz_original: pd.DataFrame) -> list[str]:
-    """Columnas que se pueden elegir para la hoja Asociaciones."""
-    return ([f"LG · {c}" for c in lg_original.columns] + [f"PCZ · {c}" for c in pcz_original.columns]
-            + [COMBINADA, FILA_LG])
+def texto_descripcion(textos_pcz: list[str], textos_lg: list[str]) -> str:
+    """Celda «Descripción»: textos de PCZ en mayúsculas, un renglón vacío y los textos del LG."""
+    return "\n".join(t.upper() for t in textos_pcz) + "\n\n" + "\n".join(textos_lg)
 
 
-def columnas_por_defecto(mapa_lg: dict, mapa_pcz: dict) -> list[str]:
-    """Selección inicial: fecha, hora y texto de LG; N°, descripción de PCZ; descripción combinada."""
-    salida = [f"LG · {mapa_lg[c]}" for c in ("Fecha", "Hora", "Transcripción") if c in mapa_lg]
-    salida += [f"PCZ · {mapa_pcz[c]}" for c in ("N° Novedad", "Descripción") if c in mapa_pcz]
-    return salida + [COMBINADA]
+def _claves(avisos_lg) -> list[tuple[int, int]]:
+    return [tuple(int(x) for x in c.split(":")) for c in avisos_lg]
 
 
-def tabla_asociaciones(lg_original: pd.DataFrame, pcz_original: pd.DataFrame, lg: pd.DataFrame,
-                       pcz: pd.DataFrame, trabajo: dict, mapa_lg: dict, mapa_pcz: dict,
-                       columnas: list[str]) -> pd.DataFrame:
-    """Una fila por asociación, con las columnas elegidas en el orden elegido.
+def _juntar(valores) -> str:
+    """Valores como texto, sin repetir, separados por « | »."""
+    return " | ".join(dict.fromkeys(v for v in (_texto_celda(x) for x in valores) if v))
 
-    La transcripción de LG trae solo los avisos asociados y cada columna de PCZ los valores de
-    las novedades asociadas, separados por « | ».
+
+def tabla_asociaciones(lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, numero_inicial: int = 1) -> pd.DataFrame:
+    """Hoja «Asociaciones»: una fila por asociación, con la estructura fija de COLUMNAS_SALIDA.
+
+    Las asociaciones van en el orden de PCZ. Si una asociación une varias novedades, sus N° se
+    juntan con « | ». Las columnas sin dato quedan vacías.
     """
-    col_texto_lg = mapa_lg["Transcripción"]
-    posicion = {}
-    for k, nov in enumerate(pcz["id"]):
-        posicion.setdefault(nov, k)
+    orden = sorted(trabajo["asociaciones"], key=lambda g: (min(g["novedades"]), g["novedades"]))
     filas = []
-    for i in range(len(lg)):
-        for g in trabajo["filas"][str(i)]["grupos"]:
-            avisos_ = [lg.loc[i, "avisos"][j] for j in g["avisos"] if j < len(lg.loc[i, "avisos"])]
-            texto_lg = " | ".join(avisos_)
-            novs = [posicion[n] for n in g["novedades"] if n in posicion]
-            fila = {}
-            for col in columnas:
-                if col == FILA_LG:
-                    fila[col] = i + 1
-                elif col == COMBINADA:
-                    desc = " | ".join(pcz.loc[k, "descripcion"] for k in novs)
-                    fila[col] = f"{desc} {texto_lg.lower()}".strip()
-                elif col.startswith("LG · "):
-                    nombre = col[len("LG · "):]
-                    fila[col] = texto_lg if nombre == col_texto_lg else lg_original.iloc[i][nombre]
-                elif col.startswith("PCZ · "):
-                    nombre = col[len("PCZ · "):]
-                    fila[col] = " | ".join(_texto_celda(pcz_original.iloc[k][nombre]) for k in novs)
-            filas.append(fila)
-    return _fechas_sin_hora(pd.DataFrame(filas, columns=columnas))
+    for n, g in enumerate(orden):
+        novs = list(g["novedades"])
+        claves = [(i, j) for i, j in _claves(g["avisos"]) if i in lg.index and j < len(lg.loc[i, "avisos"])]
+        fechas = [pcz.loc[k, "fecha"] for k in novs if pcz.loc[k, "fecha"] is not None]
+        ids = [pcz.loc[k, "id"] for k in novs]
+        fila = dict.fromkeys(COLUMNAS_SALIDA, None)
+        fila["N°"] = numero_inicial + n
+        fila["Fecha"] = fechas[0] if fechas else _juntar(pcz.loc[k, "fecha_original"] for k in novs)
+        fila["N° Novedad"] = (int(ids[0]) if ids[0].isdigit() else ids[0]) if len(ids) == 1 else " | ".join(ids)
+        fila["Descripción"] = texto_descripcion([pcz.loc[k, "descripcion"] for k in novs],
+                                                [lg.loc[i, "avisos"][j] for i, j in claves])
+        filas.append(fila)
+    return pd.DataFrame(filas, columns=list(COLUMNAS_SALIDA))
 
 
 def lg_sin_asociar(lg_original: pd.DataFrame, lg: pd.DataFrame, trabajo: dict, mapa_lg: dict) -> pd.DataFrame:
-    """Filas de LG con avisos sin asociar (descartados o no revisados), con las columnas originales.
+    """Filas de LG con avisos que no quedaron en ninguna asociación, con las columnas originales.
 
     Si parte del párrafo se asoció, la transcripción trae solo los avisos que quedaron afuera.
     """
+    usados = set(_claves(novedades_por_aviso(trabajo)))
     col_texto = mapa_lg["Transcripción"]
     filas = []
     for i in range(len(lg)):
-        cubiertos = avisos_cubiertos(trabajo["filas"][str(i)]["grupos"])
         avisos_ = lg.loc[i, "avisos"]
-        resto = [x for j, x in enumerate(avisos_) if j not in cubiertos]
-        if not avisos_ and not cubiertos:
+        resto = [x for j, x in enumerate(avisos_) if (i, j) not in usados]
+        if not avisos_:
             filas.append(lg_original.iloc[i].copy())
         elif resto:
             fila = lg_original.iloc[i].copy()
-            if cubiertos:
+            if len(resto) < len(avisos_):
                 fila[col_texto] = "\n".join(resto)
             filas.append(fila)
     return _fechas_sin_hora(pd.DataFrame(filas, columns=lg_original.columns))
 
 
 def pcz_sin_asociar(pcz_original: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict) -> pd.DataFrame:
-    """Novedades de PCZ que no están en ninguna asociación, con las columnas originales."""
-    asociadas = asociaciones_por_novedad(trabajo)
-    quedan = [k for k, nov in enumerate(pcz["id"]) if nov not in asociadas]
+    """Novedades de PCZ que no están en ninguna asociación (descartadas o sin revisar)."""
+    asociadas = asociacion_de(trabajo)
+    quedan = [k for k in range(len(pcz)) if k not in asociadas]
     return _fechas_sin_hora(pcz_original.iloc[quedan].copy())
 
 
@@ -632,26 +633,28 @@ def _fechas_sin_hora(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def exportar(lg_original: pd.DataFrame, pcz_original: pd.DataFrame, lg: pd.DataFrame, pcz: pd.DataFrame,
-             trabajo: dict, mapa_lg: dict, mapa_pcz: dict, columnas: list[str]) -> bytes:
-    """Excel con las hojas Asociaciones, LG sin asociar y PCZ sin asociar (no toca los originales)."""
+             trabajo: dict, mapa_lg: dict, numero_inicial: int = 1) -> bytes:
+    """Excel con las hojas Asociaciones, PCZ sin asociar y LG sin asociar (no toca los originales)."""
     hojas = {
-        "Asociaciones": tabla_asociaciones(lg_original, pcz_original, lg, pcz, trabajo, mapa_lg, mapa_pcz,
-                                           columnas),
-        "LG sin asociar": lg_sin_asociar(lg_original, lg, trabajo, mapa_lg),
+        "Asociaciones": tabla_asociaciones(lg, pcz, trabajo, numero_inicial),
         "PCZ sin asociar": pcz_sin_asociar(pcz_original, pcz, trabajo),
+        "LG sin asociar": lg_sin_asociar(lg_original, lg, trabajo, mapa_lg),
     }
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl", date_format="DD/MM/YYYY",
                         datetime_format="DD/MM/YYYY HH:MM") as w:
         for nombre, df in hojas.items():
             df.to_excel(w, sheet_name=nombre, index=False)
-        for hoja in w.sheets.values():
+        for nombre, hoja in w.sheets.items():
             for fila in hoja.iter_rows(min_row=2):
                 for celda in fila:
                     if isinstance(celda.value, dt.date) and (
                             not isinstance(celda.value, dt.datetime) or celda.value.time() == dt.time(0)):
-                        celda.number_format = "DD/MM/YYYY"
+                        celda.number_format = FORMATO_FECHA if nombre == "Asociaciones" else "DD/MM/YYYY"
+                    elif isinstance(celda.value, str) and "\n" in celda.value:
+                        celda.alignment = Alignment(wrap_text=True, vertical="top")
             for col in hoja.columns:
-                largo = max((len(str(c.value)) for c in col if c.value is not None), default=8)
+                largo = max((len(renglon) for c in col if c.value is not None
+                             for renglon in str(c.value).split("\n")), default=8)
                 hoja.column_dimensions[col[0].column_letter].width = min(max(largo + 2, 10), 60)
     return buffer.getvalue()
