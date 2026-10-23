@@ -31,6 +31,7 @@ tests/                  # tests con pytest + tests/ejemplos/ (Excels INVENTADOS,
 | Transcripciones del Libro de Guardia | `modulos/relleno_pdf.py` | — | En desarrollo |
 | Asociación LG ↔ PCZ | `modulos/asociacion_lg_pcz.py` | `src/asociacion_lg_pcz.py` | MVP |
 | Concatenación | `modulos/concatenacion.py` | `src/concatenacion.py` | MVP |
+| Informes PowerPoint | `modulos/informes_pptx.py` | `src/informes_pptx/` (paquete) | Etapa 1 de 3 (plantillas) |
 
 **Cruce de Excels**: subir 2+ Excels/CSV, ver sus columnas lado a lado, armar coincidencias
 (documento + columna, una o varias, con 2+ documentos cada una), elegir documento principal y
@@ -53,6 +54,19 @@ número de novedad (Nro, Fecha, Hora inicio, Hora fin, Detalle). Hora fin = hora
 entre usos. Dos descargas: tal como viene (5 columnas) y formato de la hoja «Tabla» del usuario
 (`FORMATO_TABLA`, 14 columnas con vacías en el medio para pegar con «Saltar blancos» sin pisar fórmulas).
 CSV inventado en `tests/ejemplos/LibroNovedades_ejemplo.csv`.
+
+**Informes PowerPoint** (3 etapas: 1. plantillas ✅, 2. configuraciones, 3. generación). Automatiza el
+informe mensual que el jefe arma con capturas/gráficos del Excel. Lógica en el paquete `src/informes_pptx/`:
+`plantillas.py` (detecta con python-pptx textos —también en grupos, marcadores y celdas de tabla— y lugares
+de imagen —imágenes, gráficos, objetos incrustados, marcadores de imagen vacíos—; guarda/lista/duplica/elimina),
+`reemplazo.py` (reemplaza un texto entero o un fragmento conservando el formato aunque esté partido en varios
+runs), `esquema.py` (SVG con recuadros a escala) y `office.py`: **lo único que usa Excel/PowerPoint por COM**
+(Windows + pywin32), con `OfficeSimulado` para la Mac (`INFORMES_OFFICE=simulado` lo fuerza). Se guarda en
+`informes/plantillas/<id>/` (base.pptx + plantilla.json + miniaturas/ opcional) y, desde la etapa 2,
+`informes/configuraciones/<id>.json`; `informes/` y `muestras/` (archivos reales) están en `.gitignore`.
+Cada lugar de imagen tiene id estable `img_DD_NN` escrito como nombre del shape en base.pptx; cada texto se
+ubica por diapositiva + shape_id (+ celda). Ver lo detectado: `python -m src.informes_pptx.plantillas x.pptx`.
+PowerPoint inventado en `tests/ejemplos/Informe_ejemplo.pptx` (`tests/generar_ejemplo_informe.py`).
 
 ## Reglas
 

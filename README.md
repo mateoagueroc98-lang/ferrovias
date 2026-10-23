@@ -11,6 +11,7 @@ Módulos (menú a la izquierda):
 - **Transcripciones del Libro de Guardia**: en desarrollo.
 - **Asociación LG ↔ PCZ**: asociar a mano cada párrafo del Libro de Guardia con las novedades del PCZ (ver abajo).
 - **Concatenación**: pasar el CSV del reporte LibroNovedades a un Excel con una fila por novedad (ver abajo).
+- **Informes PowerPoint**: armar el informe mensual en PowerPoint a partir del Excel (en construcción; por ahora, plantillas — ver abajo).
 
 Corre en tu compu y se abre en el navegador en `http://localhost:8501`. Los Excels **nunca** se suben a GitHub (están en `.gitignore`).
 
@@ -159,3 +160,20 @@ src/concatenacion.py          # lógica: lectura del CSV, agrupación, hora fin,
 tests/                  # tests (python -m pytest) y Excels de ejemplo inventados
 datos/          # poné acá tus Excels (ignorados por git)
 ```
+
+## Módulo: Informes PowerPoint (etapa 1: plantillas)
+
+Una **plantilla** sale de un informe PowerPoint ya armado. En **Plantillas → Nueva plantilla** subís el
+`.pptx` y la app detecta, diapositiva por diapositiva, los **textos** (cuadros de texto, títulos, textos
+dentro de grupos y celdas de tablas) y los **lugares de imagen** (capturas, gráficos y objetos pegados).
+- Cada texto se marca **Fijo** o **Variable**. Si es variable, se reemplaza **todo el cuadro** o **solo una
+  parte** (por ejemplo «Septiembre 2026» dentro del título), con un nombre (ej. «Mes del informe»). Si dos
+  textos usan el mismo nombre, se completan con el mismo valor.
+- Cada lugar de imagen lleva un nombre (ej. «Confiabilidad – tabla de eventos»).
+- **🧪 Probar los textos variables** descarga una copia con cada variable reemplazada por «su nombre», para
+  revisar que se conserven fuente, tamaño, color y negrita.
+- En la compu del trabajo (Windows con PowerPoint) se ven **miniaturas** de cada diapositiva; en la Mac se ve
+  un esquema con los recuadros a escala.
+
+Las plantillas quedan guardadas en la carpeta `informes/` de la app (no se suben a GitHub). Los archivos
+reales para probar van en `muestras/` (tampoco se suben).

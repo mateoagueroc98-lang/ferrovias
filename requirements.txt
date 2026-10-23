@@ -4,3 +4,6 @@ openpyxl>=3.1
 anthropic>=1.0
 python-dotenv>=1.0
 pytest>=8.0
+python-pptx>=1.0
+# Solo en Windows: manejar PowerPoint/Excel instalados (miniaturas, capturas)
+pywin32>=306; sys_platform == "win32"

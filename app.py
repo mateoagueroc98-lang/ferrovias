@@ -41,6 +41,7 @@ paginas = [
     st.Page("modulos/relleno_pdf.py", title="Transcripciones del LG", icon=":material/picture_as_pdf:"),
     st.Page("modulos/asociacion_lg_pcz.py", title="Asociación LG ↔ PCZ", icon=":material/link:"),
     st.Page("modulos/concatenacion.py", title="Concatenación", icon=":material/table_view:"),
+    st.Page("modulos/informes_pptx.py", title="Informes PowerPoint", icon=":material/slideshow:"),
 ]
 # El menú se arma a mano para que quede debajo del cartel.
 pagina = st.navigation(paginas, position="hidden")

@@ -3,9 +3,14 @@
 *.xls
 *.xlsm
 *.csv
+*.pptx
+# Archivos reales para probar, plantillas y configuraciones de Informes PowerPoint
+muestras/
+informes/
 # Excels INVENTADOS de prueba (sí se suben)
 !tests/ejemplos/*.xlsx
 !tests/ejemplos/*.csv
+!tests/ejemplos/*.pptx
 
 # Secretos
 .env
