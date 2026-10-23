@@ -14,38 +14,11 @@ Módulos (menú a la izquierda):
 
 Corre en tu compu y se abre en el navegador en `http://localhost:8501`. Los Excels **nunca** se suben a GitHub (están en `.gitignore`).
 
-## Instalación en Windows (una vez por computadora)
+## Instalación y uso
 
-1. Instalá **Python 3.11+** desde https://www.python.org/downloads/ (tildá *"Add python.exe to PATH"*).
-2. Instalá **Git** desde https://git-scm.com/download/win.
-3. Abrí *PowerShell* y cloná el repo:
-   ```powershell
-   cd $HOME\Documents
-   git clone https://github.com/mateoagueroc98-lang/ferrovias.git
-   cd ferrovias
-   ```
-4. Creá y activá un entorno virtual, e instalá dependencias:
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
-   ```
-   Si PowerShell bloquea el script de activación, corré una vez:
-   `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
-5. Copiá `.env.example` a `.env` y pegá tu clave de API (https://console.anthropic.com/):
-   ```powershell
-   copy .env.example .env
-   notepad .env
-   ```
-
-## Uso
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-streamlit run app.py
-```
-
-Se abre el navegador. Subí los archivos, armá las coincidencias, elegí las columnas finales y cruzá.
+Los pasos para instalar, actualizar y abrir la app en cada computadora (Mac en casa, Windows en el
+trabajo) están en [GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md](GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md).
+En la compu del trabajo **no se usa `.venv`**: se abre con `py -3.13 -m streamlit run app.py`.
 
 ## Módulo: Asociación LG ↔ PCZ
 
