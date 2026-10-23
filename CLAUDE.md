@@ -42,9 +42,9 @@ Cada novedad tiene a la izquierda 🗑️ (descartar solo esa) y ! / !! (marca a
 fila en el Excel final; la naranja gana si una asociación une ambas).
 Candidatos solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple
 sin IA. El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas
-Asociaciones (una fila por asociación; estructura fija de 14 columnas `COLUMNAS_SALIDA`, N° consecutivo
-desde el número que se elige, Fecha d/m/yyyy, Descripción = PCZ en MAYÚSCULAS + renglón vacío + LG), LG sin asociar y PCZ sin asociar
-(columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
+Asociaciones (TODAS las novedades de PCZ ordenadas por día: una fila por asociación y una por novedad sin
+asociar; estructura fija de 14 columnas `COLUMNAS_SALIDA`, N° consecutivo desde el número que se elige,
+Fecha d/m/yyyy, Descripción = PCZ en MAYÚSCULAS + renglón vacío + LG) y LG sin asociar (columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
 
 **Concatenación**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por
 número de novedad (Nro, Fecha, Hora inicio, Hora fin, Detalle). Hora fin = hora del último renglón cuyo

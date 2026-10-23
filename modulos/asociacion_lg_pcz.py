@@ -205,17 +205,17 @@ avisos_lg = a.tabla_avisos(lg)
 if paso == PASOS[2]:
     st.header("Exportar a Excel", anchor=False)
     lg_resto = a.lg_sin_asociar(lg_original, lg, trabajo, mapa_lg)
-    pcz_resto = a.pcz_sin_asociar(pcz_original, pcz, trabajo)
     p = a.progreso(trabajo, len(pcz))
     m1, m2, m3 = st.columns(3)
     m1.metric("Novedades de PCZ asociadas", p["asociadas"])
-    m2.metric("Novedades de PCZ sin asociar", len(pcz_resto))
+    m2.metric("Novedades de PCZ sin asociar", p["total"] - p["asociadas"])
     m3.metric("Filas de LG sin asociar", len(lg_resto))
     if p["pendientes"]:
-        st.info(f"Quedan {p['pendientes']} novedad(es) de PCZ sin revisar: van a la hoja «PCZ sin asociar».")
-    st.caption("El Excel trae 3 hojas: **Asociaciones** (una fila por asociación), "
-               "**PCZ sin asociar** y **LG sin asociar** (estas dos con las mismas columnas que los "
-               "archivos originales).")
+        st.info(f"Quedan {p['pendientes']} novedad(es) de PCZ sin revisar: salen en la hoja «Asociaciones» "
+                "solo con su texto de PCZ.")
+    st.caption("El Excel trae 2 hojas: **Asociaciones** (todas las novedades de PCZ ordenadas por día: una fila "
+               "por asociación y una por cada novedad sin asociar) y **LG sin asociar** (con las mismas "
+               "columnas que el archivo original).")
 
     st.subheader("Hoja «Asociaciones»", anchor=False)
     numero_inicial = st.number_input(
@@ -223,7 +223,7 @@ if paso == PASOS[2]:
         help="Poné el número que sigue en tu tabla madre: las demás filas siguen de a uno hacia abajo.")
     ss[P + "numero_inicial"] = numero_inicial  # se recuerda si vas y volvés de este paso
     tabla = a.tabla_asociaciones(lg, pcz, trabajo, int(numero_inicial))
-    st.caption(f"Vista previa ({len(tabla)} asociación(es)):")
+    st.caption(f"Vista previa ({len(tabla)} fila(s)):")
     vista = tabla.head(20).copy()
     vista["Fecha"] = vista["Fecha"].map(lambda f: f"{f.day}/{f.month}/{f.year}" if hasattr(f, "day") else f)
     st.dataframe(vista.map(lambda v: "" if v is None or (not isinstance(v, str) and pd.isna(v)) else str(v)),
@@ -233,7 +233,7 @@ if paso == PASOS[2]:
     # Sacar caracteres que Windows no acepta en nombres de archivo
     nombre = re.sub(r'[\\/:*?"<>|]', "", nombre).strip().removesuffix(".xlsx") or "asociacion_LG_PCZ"
     st.download_button(f"⬇️ Descargar {nombre}.xlsx",
-                       a.exportar(lg_original, pcz_original, lg, pcz, trabajo, mapa_lg, int(numero_inicial)),
+                       a.exportar(lg_original, lg, pcz, trabajo, mapa_lg, int(numero_inicial)),
                        f"{nombre}.xlsx", type="primary")
     st.stop()
 
@@ -432,7 +432,7 @@ def con_botonera(k: int, tarjeta, tacho: bool = True):
     with cb, st.container(key=f"botonera_{ver}_{k}"):
         if tacho:
             st.button("🗑️", key=f"bt_tacho_{ver}_{k}", on_click=desechar, args=(k,),
-                      help="Descartar esta novedad: va a la hoja «PCZ sin asociar».")
+                      help="Descartar esta novedad: sale en el Excel solo con su texto de PCZ.")
         for marca, texto, nombre in [("amarilla", "!", "amarillo"), ("naranja", "!!", "naranja")]:
             activa = color == marca
             st.button(texto, key=f"bt_{marca}_{ver}_{k}{'_on' if activa else ''}", on_click=marcar, args=(k, marca),
@@ -551,7 +551,7 @@ with st.container(border=True):
         bc[0].button("➡️ Elegir avisos del LG", type="primary", on_click=ir_a_avisos, disabled=not b["novedades"],
                      use_container_width=True)
         bc[1].button("🗑️ Descartar", on_click=descartar, disabled=not b["novedades"], use_container_width=True,
-                     help="Las novedades tildadas no tienen aviso en el LG: van a la hoja «PCZ sin asociar».")
+                     help="Las novedades tildadas no tienen aviso en el LG: salen en el Excel solo con su texto de PCZ.")
         if len(pend_dia) > 1:
             bc[2].button("☑ Todas", on_click=todas_las_pendientes, use_container_width=True,
                          help="Tilda todas las novedades pendientes del día.")
@@ -576,7 +576,7 @@ with st.container(border=True):
         bc[0].button("✅ Asociar", type="primary", on_click=asociar, disabled=not b["avisos"],
                      use_container_width=True)
         bc[1].button("🗑️ Descartar", on_click=descartar, use_container_width=True,
-                     help="Estas novedades no tienen aviso en el LG: van a la hoja «PCZ sin asociar».")
+                     help="Estas novedades no tienen aviso en el LG: salen en el Excel solo con su texto de PCZ.")
         bc[2].button("⬅️ Volver a las novedades", on_click=volver_a_novedades, use_container_width=True)
 
 # ---------------------------------------------------------- avisos del LG
