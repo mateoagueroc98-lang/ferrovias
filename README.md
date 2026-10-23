@@ -10,6 +10,7 @@ Módulos (menú a la izquierda):
 - **Cruce de Excels**: lo de arriba.
 - **Relleno de Excel mediante PDF**: en desarrollo.
 - **Asociación LG ↔ PCZ**: asociar a mano cada párrafo del Libro de Guardia con las novedades del PCZ (ver abajo).
+- **Concatenación**: pasar el CSV del reporte LibroNovedades a un Excel con una fila por novedad (ver abajo).
 
 Corre en tu compu y se abre en el navegador en `http://localhost:8501`. Los Excels **nunca** se suben a GitHub (están en `.gitignore`).
 
@@ -117,6 +118,44 @@ La configuración de la app está en `.streamlit/config.toml`: solo se abre en t
 no manda estadísticas y no vigila los archivos (más rápido en discos de red; si se actualiza el código,
 cerrá y volvé a abrir la app).
 
+## Módulo: Concatenación (Libro de Novedades, CSV → Excel)
+
+Convierte el CSV del reporte **LibroNovedades** (Reportes Grupo Emepa → Ferroviario → Operaciones →
+transporte → PCZ) en un Excel con **una fila por número de novedad**. El CSV trae una fila por cada
+renglón de texto; la app junta los renglones del mismo número. Todo corre en tu compu: no usa IA.
+
+**Pasos**
+1. Subí el CSV. El encoding en *Automático* sirve casi siempre (si las tildes o la Ñ se ven raras,
+   elegí Windows-1252 o UTF-8).
+2. Elegí las **palabras clave de fin** (viene tildada NORMAL; tocá las otras para sumarlas o escribí
+   una nueva y tocá *Agregar*). La **hora fin** es la hora del último renglón que tiene alguna de esas
+   palabras, buscadas solo en el texto, como palabras completas (NORMAL no coincide con ANORMAL ni con
+   NORMALIZADO; «recibe via» tiene que estar junto y en ese orden). Se ignoran mayúsculas, tildes,
+   puntuación y los **conectores** (de, el, la…, se editan en el desplegable; «no» y «sin» nunca).
+3. Revisá la vista previa (la última columna muestra qué renglón marcó el fin; no va al Excel), poné
+   el nombre del archivo y elegí cómo descargarlo:
+   - **Tal como viene**: las 5 columnas una al lado de la otra.
+   - **Formato de la hoja «Tabla»**: las 14 columnas de la hoja Tabla en su orden (Fecha, Mes,
+     N° Novedad, Sistema, Subsistema, Parte, Elemento, Nombre correcto, Descripción, Zona, VER, Falla,
+     Comienzo de falla, Habilitación), con datos solo en Fecha, N° Novedad, Descripción, Comienzo de
+     falla y Habilitación. Para pegarlo sin borrar las fórmulas: copiá las filas (sin el encabezado),
+     hacé clic en la celda de Fecha de la hoja Tabla, **Ctrl+Alt+V** → tildá **Saltar blancos** →
+     Aceptar. Las celdas vacías no pisan lo que ya había.
+
+El Excel tiene una hoja con: Nro novedad, Fecha, Hora inicio (primer renglón), Hora fin (vacía si
+ningún renglón coincide) y Detalle (todos los renglones, uno por línea, tal cual vienen). Fecha y horas
+son valores reales de Excel; hay filtros y el Detalle tiene *ajustar texto*.
+
+**La configuración no se guarda**: las palabras y conectores que agregues duran hasta que cierres la
+app. Cada CSV se procesa desde cero.
+
+**Avisos**: archivo sin novedades, números de novedad separados por otros (se juntan igual), fechas u
+horas inválidas (la celda queda vacía) y detalles de más de 32.767 caracteres (se recortan). Si el
+encabezado `numero,Descripción_Estado,fecha,hora,descrip` no está, el archivo se rechaza.
+
+**Probarlo con datos inventados**: subí `tests/ejemplos/LibroNovedades_ejemplo.csv` (se regenera con
+`python tests/generar_ejemplo_concatenacion.py`).
+
 ## Trabajar desde dos computadoras
 
 - Antes de empezar: `git pull`
@@ -134,6 +173,8 @@ src/cruce.py            # lógica del cruce por coincidencias
 modulos/asociacion_lg_pcz.py  # pantalla: Asociación LG ↔ PCZ
 src/ia.py               # llamadas a Claude (para el módulo de relleno)
 src/asociacion_lg_pcz.py      # lógica de la asociación (fechas, candidatos, exportación)
+modulos/concatenacion.py      # pantalla: Concatenación (Libro de Novedades CSV → Excel)
+src/concatenacion.py          # lógica: lectura del CSV, agrupación, hora fin, Excel
 tests/                  # tests (python -m pytest) y Excels de ejemplo inventados
 datos/          # poné acá tus Excels (ignorados por git)
 ```

@@ -5,6 +5,7 @@
 *.csv
 # Excels INVENTADOS de prueba (sí se suben)
 !tests/ejemplos/*.xlsx
+!tests/ejemplos/*.csv
 
 # Secretos
 .env

@@ -38,6 +38,7 @@ paginas = [
     st.Page("modulos/cruce.py", title="Cruce de Excels", icon=":material/join_inner:", default=True),
     st.Page("modulos/relleno_pdf.py", title="Relleno de Excel mediante PDF", icon=":material/picture_as_pdf:"),
     st.Page("modulos/asociacion_lg_pcz.py", title="Asociación LG ↔ PCZ", icon=":material/link:"),
+    st.Page("modulos/concatenacion.py", title="Concatenación", icon=":material/table_view:"),
 ]
 # El menú se arma a mano para que quede debajo del cartel.
 pagina = st.navigation(paginas, position="hidden")
