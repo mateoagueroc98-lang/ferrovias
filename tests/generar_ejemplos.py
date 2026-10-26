@@ -4,7 +4,8 @@ Uso:  python tests/generar_ejemplos.py
 Crea tests/ejemplos/LG_ejemplo.xlsx y tests/ejemplos/PCZ_ejemplo.xlsx.
 Las fechas vienen en formatos mezclados a propósito (fecha de Excel, número serial,
 texto "DD/MM/AAAA" y "D/M/AA") y hay una fecha inválida para ver la advertencia.
-PCZ trae además una columna Hora (con algunas celdas vacías).
+PCZ trae además una columna Hora (con algunas celdas vacías) y Zona, VER, Falla, Comienzo de falla
+y Habilitación (se copian al Excel final).
 """
 import datetime as dt
 import re
@@ -87,17 +88,27 @@ def generar(carpeta: Path = CARPETA) -> tuple[Path, Path]:
 
     wb = Workbook()
     ws = wb.active
-    ws.append(["Descripcion", "Fecha", "Nº Novedad", "Hora"])
+    ws.append(["Descripcion", "Fecha", "Nº Novedad", "Hora", "Zona", "VER", "Falla", "Comienzo de falla",
+               "Habilitación"])
     for n, (desc, fecha) in enumerate(PCZ, start=1001):
         # Hora en columna aparte (la misma que figura en el texto); algunas vacías y en formatos mezclados
         m = re.search(r"(\d{1,2}):(\d{2})", desc)
         hora = None
         if m and n % 4:
             hora = dt.time(int(m[1]), int(m[2])) if n % 2 else f"{m[1]}:{m[2]}"
-        ws.append([desc, fecha, n, hora])
+        comienzo = habilitacion = None
+        if m and isinstance(fecha, dt.datetime):
+            comienzo = fecha.replace(hour=int(m[1]), minute=int(m[2]))
+            habilitacion = comienzo + dt.timedelta(minutes=45)
+        falla = ["Señalamiento", "Barreras", "Energía", "Vía"][n % 4]
+        ws.append([desc, fecha, n, hora, f"Zona {n % 3 + 1}", "Sí" if n % 2 else "No", falla, comienzo,
+                   habilitacion])
     for celda in ws["B"][1:]:
         if isinstance(celda.value, dt.datetime):
             celda.number_format = "DD/MM/YYYY"
+    for celda in [*ws["H"][1:], *ws["I"][1:]]:
+        if isinstance(celda.value, dt.datetime):
+            celda.number_format = "DD/MM/YYYY HH:MM"
     ruta_pcz = carpeta / "PCZ_ejemplo.xlsx"
     wb.save(ruta_pcz)
     return ruta_lg, ruta_pcz

@@ -57,11 +57,29 @@ def test_horas_en_texto_no_confunde_km():
 def test_mapear_columnas_tolerante():
     df = pd.DataFrame(columns=["  DESCRIPCION ", "fecha", "Nº Novedad", "Hora del evento"])
     mapa, faltan = a.mapear_columnas(df, a.COLUMNAS_PCZ)
-    assert faltan == [] and mapa["Hora"] == "Hora del evento"
+    assert faltan == list(a.EXTRAS_PCZ) and mapa["Hora"] == "Hora del evento"
     assert mapa["N° Novedad"] == "Nº Novedad"
     for nombre in ["N° Novedad", "N Novedad", "Nro. Novedad", "nº novedad"]:
         _, faltan = a.mapear_columnas(pd.DataFrame(columns=["Descripción", "Fecha", nombre]), a.COLUMNAS_PCZ)
-        assert faltan == ["Hora"], nombre  # la hora es opcional
+        assert faltan == ["Hora", *a.EXTRAS_PCZ], nombre  # hora y columnas extra son opcionales
+
+
+def test_hora_de_pcz_sale_de_comienzo_de_falla_si_no_hay_columna_hora():
+    sin_hora = pd.DataFrame(columns=["Descripción", "Fecha", "Comienzo de falla", "Habilitación"])
+    mapa, _ = a.mapear_columnas(sin_hora, a.COLUMNAS_PCZ)
+    assert mapa["Hora"] == "Comienzo de falla" and mapa["Comienzo de falla"] == "Comienzo de falla"
+    con_hora = pd.DataFrame(columns=["Comienzo de falla", "Descripción", "Fecha", "Hora"])
+    assert a.mapear_columnas(con_hora, a.COLUMNAS_PCZ)[0]["Hora"] == "Hora"  # «Hora» tiene prioridad
+
+
+def test_preparar_pcz_hora_desde_fecha_y_hora():
+    df = pd.DataFrame({"Fecha": ["04/03/2025"] * 3, "Descripcion": ["A", "B", "C"],
+                       "Comienzo de falla": [pd.Timestamp(2025, 3, 4, 14, 50), "04/03/2025 9:05", None]})
+    mapa = {"Fecha": "Fecha", "Descripción": "Descripcion", "Hora": "Comienzo de falla",
+            "Comienzo de falla": "Comienzo de falla"}
+    pcz = a.preparar_pcz(df, mapa)
+    assert list(pcz["hora"]) == [14 * 60 + 50, 9 * 60 + 5, None]
+    assert pcz.loc[0, "Comienzo de falla"] == pd.Timestamp(2025, 3, 4, 14, 50)  # se copia entera
 
 
 def test_mapear_columnas_avisa_faltantes():
@@ -205,17 +223,24 @@ MAPA_PCZ = {"Fecha": "Fecha", "Descripción": "Descripcion", "N° Novedad": "Nº
 def test_estructura_fija_de_la_hoja_asociaciones():
     assert list(a.COLUMNAS_SALIDA) == [
         "N°", "ID", "Fecha", "Mes", "N° Novedad", "Sistema", "Subsistema", "Parte", "Elemento",
-        "Nombre correcto", "Km. INPAN", "BuscarV (Km. INPAN)", "Modelo", "Descripción"]
+        "Nombre correcto", "Km. INPAN", "BuscarV (Km. INPAN)", "Modelo", "Página", "Descripción",
+        "Zona", "VER", "Falla", "Comienzo de falla", "Habilitación"]
     assert a.texto_descripcion(["Falla señal 14", "Normalizada"], ["Se informa falla.", "Se normaliza."]) == (
         "FALLA SEÑAL 14\nNORMALIZADA\n\nSe informa falla.\nSe normaliza.")
+    assert a.texto_descripcion(["Falla señal 14"], []) == "FALLA SEÑAL 14"  # sin asociar: solo PCZ
 
 
-def test_tabla_asociaciones_una_fila_por_asociacion(tmp_path):
+def test_tabla_asociaciones_trae_todas_las_novedades_por_dia(tmp_path):
     _, _, lg, pcz = _cargar_ejemplos(tmp_path)
     s = _trabajo_ejemplo(pcz)
     t = a.tabla_asociaciones(lg, pcz, s, numero_inicial=120)
-    assert list(t.columns) == list(a.COLUMNAS_SALIDA) and len(t) == 3
-    assert list(t["N°"]) == [120, 121, 122]  # consecutivo desde el número elegido
+    # 30 novedades: 4 en 3 asociaciones (1001+1002 unidas) y 26 sin asociar, una fila cada una
+    assert list(t.columns) == list(a.COLUMNAS_SALIDA) and len(t) == 29
+    assert list(t["N°"]) == list(range(120, 149))  # consecutivo desde el número elegido
+    ids = [str(x) for x in t["N° Novedad"]]
+    assert ids[:3] == ["1001 | 1002", "1003", "1004"] and ids[19:21] == ["1021", "1022"]
+    assert ids[-1] == "1030"  # sin fecha reconocida: al final
+    assert t.iloc[2]["Descripción"] == "CAMBIO 7 VILLA ADELINA SIN COMPROBACIÓN 14:50"  # descartada: solo PCZ
     vacias = [c for c, uso in a.COLUMNAS_SALIDA.items() if uso is None]
     assert t[vacias].isna().all().all()
     f = t.iloc[0]  # 1001 + 1002 unidas
@@ -224,6 +249,47 @@ def test_tabla_asociaciones_una_fila_por_asociacion(tmp_path):
                                 "Se informa falla en señal 14 de estación Boulogne, concurre mecánico Pérez.\n"
                                 "Se normaliza señal 14 a las 9:10 hs.")
     assert t.iloc[1]["N° Novedad"] == 1003  # una sola novedad: número
+
+
+def test_pagina_del_lg_antes_de_la_descripcion(tmp_path):
+    _, _, lg, pcz = _cargar_ejemplos(tmp_path)
+    t = a.tabla_asociaciones(lg, pcz, _trabajo_ejemplo(pcz))
+    assert list(t.columns).index("Página") == list(t.columns).index("Descripción") - 1
+    ids = [str(x) for x in t["N° Novedad"]]
+    pagina = dict(zip(ids, t["Página"]))
+    assert pagina["1001 | 1002"] == 12 and pagina["1003"] == 12   # una página: número
+    assert pagina["1022"] == "14 | 12"                             # avisos de dos páginas
+    assert pd.isna(pagina["1004"])                                 # sin asociar: vacía
+
+
+def test_columnas_de_pcz_despues_de_la_descripcion(tmp_path):
+    _, _, lg, pcz = _cargar_ejemplos(tmp_path)
+    t = a.tabla_asociaciones(lg, pcz, _trabajo_ejemplo(pcz))
+    unidas, sola = t.iloc[0], t.iloc[2]  # 1001 + 1002 unidas; 1004 sola (descartada)
+    assert unidas["Zona"] == "Zona 3 | Zona 1" and unidas["Falla"] == "Barreras | Energía"
+    assert sola["Zona"] == "Zona 3" and sola["VER"] == "No" and sola["Falla"] == "Señalamiento"
+    assert sola["Comienzo de falla"] == pd.Timestamp(2025, 3, 4, 14, 50)  # fecha y hora, sin tocar
+    assert sola["Habilitación"] == pd.Timestamp(2025, 3, 4, 15, 35)
+
+
+def test_columnas_de_pcz_vacias_si_el_archivo_no_las_tiene():
+    df = pd.DataFrame({"Fecha": ["04/03/2025"], "Descripcion": ["A"]})
+    pcz = a.preparar_pcz(df, {"Fecha": "Fecha", "Descripción": "Descripcion"})
+    lg = a.preparar_lg(pd.DataFrame({"Fecha": ["04/03/2025"], "T": ["X"]}), {"Fecha": "Fecha", "Transcripción": "T"})
+    t = a.tabla_asociaciones(lg, pcz, a.trabajo_nuevo("h"))
+    assert t[list(a.EXTRAS_PCZ)].isna().all().all()
+
+
+def test_tabla_asociaciones_ordena_por_dia_aunque_el_pcz_venga_desordenado():
+    df = pd.DataFrame({"Fecha": ["06/03/2025", "04/03/2025", "sin fecha", "04/03/2025", "05/03/2025"],
+                       "Descripcion": ["A", "B", "C", "D", "E"], "N": [1, 2, 3, 4, 5]})
+    pcz = a.preparar_pcz(df, {"Fecha": "Fecha", "Descripción": "Descripcion", "N° Novedad": "N"})
+    lg = a.preparar_lg(pd.DataFrame({"Fecha": ["04/03/2025"], "T": ["Aviso"]}), {"Fecha": "Fecha", "Transcripción": "T"})
+    s = a.trabajo_nuevo("h")
+    a.asociar(s, [3], ["0:0"])                    # D (4/3) asociada
+    t = a.tabla_asociaciones(lg, pcz, s)
+    assert list(t["N° Novedad"]) == [2, 4, 5, 1, 3]  # 4/3 (en orden del PCZ), 5/3, 6/3, sin fecha
+    assert t.iloc[1]["Descripción"] == "D\n\nAviso"
 
 
 def test_sin_asociar_conserva_columnas_originales(tmp_path):
@@ -235,25 +301,75 @@ def test_sin_asociar_conserva_columnas_originales(tmp_path):
     assert list(lgs["Pagina"]) == [12, 13, 13, 14]
     assert lgs.iloc[0]["Transcripcion"] == "Cambio 7 sin comprobación en Villa Adelina, se ajusta."
     assert lgs.iloc[3]["Transcripcion"] == "Se normaliza a las 7:05."
-    pzs = a.pcz_sin_asociar(pcz_df, pcz, s)
-    assert list(pzs.columns) == list(pcz_df.columns)
-    assert len(pzs) == len(pcz_df) - 4 and 1004 in set(pzs["Nº Novedad"])  # la descartada también
 
 
-def test_exportar_tres_hojas(tmp_path):
+def test_exportar_dos_hojas(tmp_path):
     lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
     s = _trabajo_ejemplo(pcz)
-    datos = a.exportar(lg_df, pcz_df, lg, pcz, s, MAPA_LG, numero_inicial=7)
+    datos = a.exportar(lg_df, lg, pcz, s, MAPA_LG, numero_inicial=7)
     hojas = pd.read_excel(io.BytesIO(datos), sheet_name=None)
-    assert list(hojas) == ["Asociaciones", "PCZ sin asociar", "LG sin asociar"]
-    assert list(hojas["Asociaciones"].columns) == list(a.COLUMNAS_SALIDA) and len(hojas["Asociaciones"]) == 3
-    assert len(hojas["LG sin asociar"]) == 4 and len(hojas["PCZ sin asociar"]) == len(pcz_df) - 4
+    assert list(hojas) == ["Asociaciones", "LG sin asociar"]
+    assert list(hojas["Asociaciones"].columns) == list(a.COLUMNAS_SALIDA) and len(hojas["Asociaciones"]) == 29
+    assert len(hojas["LG sin asociar"]) == 4
     # En el Excel: fecha real con formato d/m/aaaa y la descripción con «ajustar texto»
     from openpyxl import load_workbook
     hoja = load_workbook(io.BytesIO(datos))["Asociaciones"]
     assert hoja["A2"].value == 7 and hoja["C2"].number_format == "d/m/yyyy"
     assert hoja["C2"].value.date() == F(2025, 3, 4)
-    assert hoja["N2"].alignment.wrap_text and hoja["N2"].value.startswith("FALLA SEÑAL 14")
+    assert hoja["N2"].value == 12  # página del LG de los avisos de 1001 + 1002
+    assert hoja["O2"].alignment.wrap_text and hoja["O2"].value.startswith("FALLA SEÑAL 14")
+    assert hoja["P4"].value == "Zona 3" and hoja["S4"].number_format == "d/m/yyyy h:mm"  # 1004
+
+
+def test_marcar_pone_cambia_y_saca():
+    s = a.trabajo_nuevo("h")
+    a.marcar(s, 3, "amarilla")
+    assert s["marcas"] == {3: "amarilla"}
+    a.marcar(s, 3, "naranja")                     # otro color: lo reemplaza
+    assert s["marcas"] == {3: "naranja"}
+    a.marcar(s, 3, "naranja")                     # el mismo color otra vez: la saca
+    assert s["marcas"] == {}
+
+
+def test_marcar_una_marca_tambien_las_unidas():
+    s = a.trabajo_nuevo("h")
+    a.marcar(s, 1, "amarilla", juntas=[1, 2, 3])
+    assert s["marcas"] == {1: "amarilla", 2: "amarilla", 3: "amarilla"}
+    a.marcar(s, 2, "naranja", juntas=[1, 2, 3])   # cambiar el color de una cambia todas
+    assert s["marcas"] == {1: "naranja", 2: "naranja", 3: "naranja"}
+    a.marcar(s, 3, "naranja", juntas=[1, 2, 3])   # sacarla a una la saca de todas
+    assert s["marcas"] == {}
+
+
+def test_asociar_unifica_las_marcas():
+    s = a.trabajo_nuevo("h")
+    a.marcar(s, 1, "amarilla")
+    a.marcar(s, 2, "naranja")
+    a.asociar(s, [1, 2, 3], ["0:0"])
+    assert s["marcas"] == {1: "naranja", 2: "naranja", 3: "naranja"}
+
+
+def test_marca_de_una_fila_naranja_pesa_mas():
+    s = a.trabajo_nuevo("h")
+    a.marcar(s, 1, "amarilla")
+    a.marcar(s, 2, "naranja")
+    assert a.marca(s, [1]) == "amarilla" and a.marca(s, [1, 2]) == "naranja" and a.marca(s, [5]) is None
+
+
+def test_exportar_resalta_las_filas_marcadas(tmp_path):
+    from openpyxl import load_workbook
+    lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
+    s = _trabajo_ejemplo(pcz)
+    pos = {n: k for k, n in enumerate(pcz["id"])}
+    a.marcar(s, pos["1002"], "amarilla")          # asociada (unida con 1001): fila 2 de Asociaciones
+    a.marcar(s, pos["1003"], "naranja")           # asociada: fila 3 de Asociaciones
+    a.marcar(s, pos["1004"], "amarilla")          # descartada: fila 4 (también está en la hoja)
+    hoja = load_workbook(io.BytesIO(a.exportar(lg_df, lg, pcz, s, MAPA_LG)))["Asociaciones"]
+    color = lambda celda: celda.fill.fgColor.rgb if celda.fill.fill_type == "solid" else None
+    assert {color(c) for c in hoja[2]} == {"00FFFF00"}
+    assert {color(c) for c in hoja[3]} == {"00FFC000"}
+    assert {color(c) for c in hoja[4]} == {"00FFFF00"}
+    assert all(color(c) is None for fila in hoja.iter_rows(min_row=5) for c in fila)
 
 
 # ------------------------------------------------ grupos aviso(s) -> novedad(es)

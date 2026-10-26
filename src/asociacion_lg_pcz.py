@@ -11,24 +11,35 @@ import re
 import unicodedata
 
 import pandas as pd
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, PatternFill
 
 # ------------------------------------------------------------------ columnas
-# Nombre canónico -> función que reconoce el encabezado ya normalizado
-# (sin tildes, minúsculas, solo letras y números).
+# Nombre canónico -> función que reconoce el encabezado ya normalizado (sin tildes, minúsculas,
+# solo letras y números). No es búsqueda aproximada: son reglas fijas. Si hay varias reglas (tupla),
+# se prueban en orden: la segunda solo se usa si ninguna columna cumple la primera.
 COLUMNAS_LG = {
     "Fecha": lambda c: c == "fecha",
     "Transcripción": lambda c: c == "transcripcion",
     "Hora": lambda c: c.startswith("hora"),
+    # Solo se copia al Excel final (a la izquierda de «Descripción»)
+    "Página": lambda c: c.startswith("pagina") or c in ("pag", "pg"),
 }
+EXTRAS_LG = ("Página",)
 COLUMNAS_PCZ = {
     "Fecha": lambda c: c == "fecha",
     "Descripción": lambda c: c == "descripcion",
     # "N° Novedad", "Nº Novedad", "N Novedad", "Nro. Novedad", "Número de novedad"...
     "N° Novedad": lambda c: re.fullmatch(r"(n|no|nro|num|numero)?(de)?novedad", c) is not None,
-    "Hora": lambda c: c.startswith("hora"),
+    # Sin columna «Hora…», la hora se toma de «Comienzo de falla» (fecha y hora)
+    "Hora": (lambda c: c.startswith("hora"), lambda c: c.startswith("comienzo")),
+    # Columnas que solo se copian al Excel final (después de «Descripción»)
+    "Zona": lambda c: c == "zona",
+    "VER": lambda c: c == "ver",
+    "Falla": lambda c: c == "falla",
+    "Comienzo de falla": lambda c: c.startswith("comienzo"),
+    "Habilitación": lambda c: c.startswith("habilitacion"),
 }
-
+EXTRAS_PCZ = ("Zona", "VER", "Falla", "Comienzo de falla", "Habilitación")
 
 
 def sin_tildes(texto: str) -> str:
@@ -47,8 +58,9 @@ def mapear_columnas(df: pd.DataFrame, esperadas: dict) -> tuple[dict, list[str]]
     Devuelve ({nombre canónico: nombre real en el archivo}, [faltantes]).
     """
     mapa, faltan = {}, []
-    for canon, reconoce in esperadas.items():
-        real = next((c for c in df.columns if reconoce(_clave_encabezado(c))), None)
+    for canon, reglas in esperadas.items():
+        reglas = reglas if isinstance(reglas, tuple) else (reglas,)
+        real = next((c for regla in reglas for c in df.columns if regla(_clave_encabezado(c))), None)
         if real is None:
             faltan.append(canon)
         else:
@@ -144,6 +156,8 @@ def parsear_hora(valor) -> int | None:
             return int(valor) * 60
         return None
     texto = str(valor).strip()
+    # Fecha y hora en texto ("04/03/2025 14:50", "2025-03-04 14:50:00"): se usa solo la hora
+    texto = re.sub(r"^\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4}[\sT]+", "", texto)
     m = re.fullmatch(r"([01]?\d|2[0-3])(?:[:.]([0-5]\d))?(?::\d\d)?\s*(?:hs?)?", texto, re.IGNORECASE)
     if m:
         return int(m.group(1)) * 60 + int(m.group(2) or 0)
@@ -317,11 +331,12 @@ def preparar_lg(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
 
 
 # Columnas que pueden no estar en el archivo de PCZ (sin N° Novedad se usa el número de fila del Excel)
-OPCIONALES_PCZ = ("N° Novedad", "Hora")
+OPCIONALES_PCZ = ("N° Novedad", "Hora") + EXTRAS_PCZ
 
 
 def preparar_pcz(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
-    """Tabla de trabajo de PCZ: id, descripción, fecha y hora normalizadas.
+    """Tabla de trabajo de PCZ: id, descripción, fecha y hora normalizadas, más las columnas de
+    EXTRAS_PCZ tal como vienen (vacías si el archivo no las tiene).
 
     Sin columna "N° Novedad", el id de cada novedad es su número de fila en el Excel.
     """
@@ -337,6 +352,9 @@ def preparar_pcz(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
         "fecha": df[mapa["Fecha"]].map(parsear_fecha),
         "hora": pd.Series([parsear_hora(v) for v in hora], index=df.index, dtype=object),
     })
+    for nombre in EXTRAS_PCZ:
+        t[nombre] = (df[mapa[nombre]].astype(object) if nombre in mapa
+                     else pd.Series([None] * len(df), index=df.index, dtype=object))
     return t.reset_index(drop=True)
 
 
@@ -463,13 +481,15 @@ def trabajo_nuevo(huella_archivos: str) -> dict:
 
     asociaciones: [{"novedades": [posición en PCZ], "avisos": ["fila:aviso" del LG]}]
     descartadas: novedades de PCZ sin aviso en el LG.
+    marcas: {posición en PCZ: "amarilla" | "naranja"}, para resaltar su fila en el Excel final.
     """
-    return {"huella": huella_archivos, "dia": 0, "asociaciones": [], "descartadas": []}
+    return {"huella": huella_archivos, "dia": 0, "asociaciones": [], "descartadas": [], "marcas": {}}
 
 
 def asociar(trabajo: dict, novedades, avisos_lg) -> None:
     trabajo["asociaciones"].append({"novedades": sorted(set(novedades)), "avisos": list(dict.fromkeys(avisos_lg))})
     trabajo["descartadas"] = [k for k in trabajo["descartadas"] if k not in set(novedades)]
+    unificar_marcas(trabajo, novedades)
 
 
 def descartar(trabajo: dict, novedades) -> None:
@@ -482,6 +502,38 @@ def quitar_asociacion(trabajo: dict, i: int) -> None:
 
 def recuperar(trabajo: dict, novedad: int) -> None:
     trabajo["descartadas"] = [k for k in trabajo["descartadas"] if k != novedad]
+
+
+# Marcas: resaltan en el Excel final la fila donde termina la novedad (en «Asociaciones» si está
+# asociada o no). La naranja pesa más que la amarilla.
+COLORES_MARCA = {"amarilla": "FFFF00", "naranja": "FFC000"}
+
+
+def marcar(trabajo: dict, novedad: int, color: str, juntas=()) -> None:
+    """Pone la marca de ese color; si ya la tenía, la saca.
+
+    `juntas` son las novedades unidas con ella (asociadas o tildadas juntas): todas quedan igual.
+    """
+    marcas = trabajo.setdefault("marcas", {})
+    sacar = marcas.get(novedad) == color
+    for k in {novedad, *juntas}:
+        if sacar:
+            marcas.pop(k, None)
+        else:
+            marcas[k] = color
+
+
+def unificar_marcas(trabajo: dict, novedades) -> None:
+    """Novedades unidas en una asociación: todas toman la marca de la fila (la naranja gana)."""
+    if color := marca(trabajo, novedades):
+        for k in novedades:
+            trabajo["marcas"][k] = color
+
+
+def marca(trabajo: dict, novedades) -> str | None:
+    """Marca de una fila con estas novedades: naranja si alguna es naranja, si no amarilla, si no None."""
+    colores = {trabajo.get("marcas", {}).get(k) for k in novedades}
+    return next((c for c in ("naranja", "amarilla") if c in colores), None)
 
 
 def asociacion_de(trabajo: dict) -> dict[int, int]:
@@ -533,7 +585,10 @@ COLUMNAS_SALIDA = {
     "Km. INPAN": None,
     "BuscarV (Km. INPAN)": None,
     "Modelo": None,
+    "Página": "Página del LG de los avisos asociados (si son de varias: «12 | 13»).",
     "Descripción": "Texto de PCZ en MAYÚSCULAS, un renglón vacío y abajo el texto del LG tal como viene.",
+    # De PCZ, tal como vienen (si se unieron varias novedades: valores distintos con « | »)
+    **{nombre: f"Columna «{nombre}» de PCZ." for nombre in EXTRAS_PCZ},
 }
 FORMATO_FECHA = "d/m/yyyy"
 
@@ -554,8 +609,9 @@ def _texto_celda(v) -> str:
 
 
 def texto_descripcion(textos_pcz: list[str], textos_lg: list[str]) -> str:
-    """Celda «Descripción»: textos de PCZ en mayúsculas, un renglón vacío y los textos del LG."""
-    return "\n".join(t.upper() for t in textos_pcz) + "\n\n" + "\n".join(textos_lg)
+    """Celda «Descripción»: textos de PCZ en mayúsculas, un renglón vacío y los textos del LG (si hay)."""
+    pcz = "\n".join(t.upper() for t in textos_pcz)
+    return pcz + "\n\n" + "\n".join(textos_lg) if textos_lg else pcz
 
 
 def _claves(avisos_lg) -> list[tuple[int, int]]:
@@ -567,15 +623,28 @@ def _juntar(valores) -> str:
     return " | ".join(dict.fromkeys(v for v in (_texto_celda(x) for x in valores) if v))
 
 
-def tabla_asociaciones(lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, numero_inicial: int = 1) -> pd.DataFrame:
-    """Hoja «Asociaciones»: una fila por asociación, con la estructura fija de COLUMNAS_SALIDA.
+def _en_orden(pcz: pd.DataFrame, trabajo: dict) -> list[dict]:
+    """Filas de la hoja «Asociaciones»: cada asociación y cada novedad de PCZ sin asociar (sola y sin
+    avisos), ordenadas por día y, dentro del día, en el orden del PCZ. Sin fecha reconocida, al final."""
+    asociadas = asociacion_de(trabajo)
+    grupos = list(trabajo["asociaciones"]) + [{"novedades": [k], "avisos": []}
+                                              for k in range(len(pcz)) if k not in asociadas]
 
-    Las asociaciones van en el orden de PCZ. Si una asociación une varias novedades, sus N° se
-    juntan con « | ». Las columnas sin dato quedan vacías.
+    def orden(g):
+        fechas = [pcz.loc[k, "fecha"] for k in g["novedades"] if pcz.loc[k, "fecha"] is not None]
+        return (not fechas, min(fechas) if fechas else dt.date.min, min(g["novedades"]), g["novedades"])
+    return sorted(grupos, key=orden)
+
+
+def tabla_asociaciones(lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, numero_inicial: int = 1) -> pd.DataFrame:
+    """Hoja «Asociaciones»: una fila por asociación y una por cada novedad de PCZ sin asociar
+    (descartada o sin revisar), con la estructura fija de COLUMNAS_SALIDA, ordenadas por día.
+
+    Si una asociación une varias novedades, sus N° se juntan con « | ». Las columnas sin dato
+    quedan vacías.
     """
-    orden = sorted(trabajo["asociaciones"], key=lambda g: (min(g["novedades"]), g["novedades"]))
     filas = []
-    for n, g in enumerate(orden):
+    for n, g in enumerate(_en_orden(pcz, trabajo)):
         novs = list(g["novedades"])
         claves = [(i, j) for i, j in _claves(g["avisos"]) if i in lg.index and j < len(lg.loc[i, "avisos"])]
         fechas = [pcz.loc[k, "fecha"] for k in novs if pcz.loc[k, "fecha"] is not None]
@@ -586,6 +655,15 @@ def tabla_asociaciones(lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, numer
         fila["N° Novedad"] = (int(ids[0]) if ids[0].isdigit() else ids[0]) if len(ids) == 1 else " | ".join(ids)
         fila["Descripción"] = texto_descripcion([pcz.loc[k, "descripcion"] for k in novs],
                                                 [lg.loc[i, "avisos"][j] for i, j in claves])
+        paginas = list(dict.fromkeys(p for p in (lg.loc[i, "pagina"] for i, _ in claves) if p))
+        if len(paginas) == 1:
+            fila["Página"] = int(paginas[0]) if paginas[0].isdigit() else paginas[0]
+        elif paginas:
+            fila["Página"] = " | ".join(paginas)
+        for nombre in EXTRAS_PCZ:
+            valores = [v for v in (pcz.loc[k, nombre] for k in novs) if _texto_celda(v)]
+            fila[nombre] = (_sin_hora(valores[0]) if len({_texto_celda(v) for v in valores}) == 1
+                            else _juntar(valores) or None)
         filas.append(fila)
     return pd.DataFrame(filas, columns=list(COLUMNAS_SALIDA))
 
@@ -611,13 +689,6 @@ def lg_sin_asociar(lg_original: pd.DataFrame, lg: pd.DataFrame, trabajo: dict, m
     return _fechas_sin_hora(pd.DataFrame(filas, columns=lg_original.columns))
 
 
-def pcz_sin_asociar(pcz_original: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict) -> pd.DataFrame:
-    """Novedades de PCZ que no están en ninguna asociación (descartadas o sin revisar)."""
-    asociadas = asociacion_de(trabajo)
-    quedan = [k for k in range(len(pcz)) if k not in asociadas]
-    return _fechas_sin_hora(pcz_original.iloc[quedan].copy())
-
-
 def _sin_hora(v):
     if isinstance(v, (pd.Timestamp, dt.datetime)) and not pd.isna(v) and v.time() == dt.time(0):
         return v.date()
@@ -632,13 +703,15 @@ def _fechas_sin_hora(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def exportar(lg_original: pd.DataFrame, pcz_original: pd.DataFrame, lg: pd.DataFrame, pcz: pd.DataFrame,
-             trabajo: dict, mapa_lg: dict, numero_inicial: int = 1) -> bytes:
-    """Excel con las hojas Asociaciones, PCZ sin asociar y LG sin asociar (no toca los originales)."""
+def exportar(lg_original: pd.DataFrame, lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, mapa_lg: dict, numero_inicial: int = 1) -> bytes:
+    """Excel con las hojas Asociaciones y LG sin asociar (no toca los originales)."""
     hojas = {
         "Asociaciones": tabla_asociaciones(lg, pcz, trabajo, numero_inicial),
-        "PCZ sin asociar": pcz_sin_asociar(pcz_original, pcz, trabajo),
         "LG sin asociar": lg_sin_asociar(lg_original, lg, trabajo, mapa_lg),
+    }
+    # Color de cada fila (en el orden de la hoja) según las marcas de sus novedades
+    colores = {
+        "Asociaciones": [marca(trabajo, g["novedades"]) for g in _en_orden(pcz, trabajo)],
     }
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl", date_format="DD/MM/YYYY",
@@ -651,8 +724,14 @@ def exportar(lg_original: pd.DataFrame, pcz_original: pd.DataFrame, lg: pd.DataF
                     if isinstance(celda.value, dt.date) and (
                             not isinstance(celda.value, dt.datetime) or celda.value.time() == dt.time(0)):
                         celda.number_format = FORMATO_FECHA if nombre == "Asociaciones" else "DD/MM/YYYY"
+                    elif isinstance(celda.value, dt.datetime) and nombre == "Asociaciones":
+                        celda.number_format = FORMATO_FECHA + " h:mm"  # p. ej. Comienzo de falla
                     elif isinstance(celda.value, str) and "\n" in celda.value:
                         celda.alignment = Alignment(wrap_text=True, vertical="top")
+            for n, color in enumerate(colores.get(nombre, []), start=2):
+                if color:
+                    for celda in hoja[n]:
+                        celda.fill = PatternFill("solid", fgColor=COLORES_MARCA[color])
             for col in hoja.columns:
                 largo = max((len(renglon) for c in col if c.value is not None
                              for renglon in str(c.value).split("\n")), default=8)

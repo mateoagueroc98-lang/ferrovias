@@ -27,12 +27,19 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
 
 **Archivos que necesita** (las columnas pueden llamarse como sea: al cargar elegís cuál es cada dato):
 - **LG**: Fecha y Transcripción (cada fila es un párrafo; cada renglón es un aviso) y, si hay, Hora.
-- **PCZ**: Fecha, Descripción, N° Novedad y, si hay, Hora.
+  Si tiene una columna «Página» (o «Pág»), se copia sola al Excel final (sin desplegable).
+- **PCZ**: Fecha, Descripción, N° Novedad y, si hay, Hora. Además, si el archivo las tiene (se reconocen
+  solas por nombre, sin desplegable), se copian al Excel final: Zona, VER, Falla, Comienzo de falla y
+  Habilitación.
 - **N° Novedad** es lo que identifica cada novedad. En la hoja `Asociaciones`, si una asociación tiene
   varias novedades, sus N° se juntan en la misma celda separados por ` | `. Si el archivo no tiene esa
   columna, se puede usar el número de fila del Excel.
 - **Hora** (LG y PCZ, opcional): suma puntos a los avisos con hora cercana a la de la novedad, además
   de las horas escritas dentro de los textos.
+- **Cómo se reconocen las columnas**: no es búsqueda aproximada, son reglas fijas sobre el encabezado
+  (sin tildes, mayúsculas ni signos). La Hora de PCZ es la columna que empieza con «Hora»; si no hay
+  ninguna, se usa «Comienzo de falla» (de su fecha y hora se toma solo la hora). Una misma columna puede
+  usarse como Hora y además copiarse al Excel final. Siempre se puede cambiar a mano en el desplegable.
 
 **Pasos**
 1. **Carga**: subí los dos Excel y, debajo de cada uno, elegí qué columna es cada dato (si se llaman
@@ -57,24 +64,38 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
      aparecen los demás (el buscador busca siempre entre todos).
    - Novedades y avisos se muestran como tarjetas: un clic en cualquier parte de la tarjeta la
      tilda o destilda (las elegidas se pintan de color).
+   - A la izquierda de cada novedad de PCZ hay 3 botones chicos: **🗑️** la descarta al instante (solo
+     esa, sin tocar lo tildado), **!** (amarillo) y **!!** (naranja) la marcan para que su fila salga
+     **resaltada en ese color en el Excel final** (hoja «Asociaciones», esté asociada o no). Tocar otra vez el mismo botón saca la marca.
+     Las novedades unidas (tildadas juntas o ya asociadas entre sí) llevan siempre la misma marca:
+     marcar, cambiar el color o sacar la marca de una lo hace en todas. Si al asociar tenían marcas
+     distintas, gana la naranja. Las novedades ya resueltas (en gris) muestran solo ! y !!.
+   - Los botones de acción (Elegir avisos del LG / Asociar, Descartar, Todas, Volver) quedan **fijos abajo
+     de la pantalla** mientras hacés scroll.
    - Atajos: **1–9** tildar novedad (paso ①) o aviso (paso ②) · **Enter** pasar al paso ② / asociar ·
      **D** descartar · **← →** día anterior/siguiente.
    - "Ver también día anterior / siguiente" (apagado por defecto) agrega esos avisos marcados como
      **OTRO DÍA**, para eventos que cruzan la medianoche.
    - Un aviso ya usado en otra asociación se puede elegir igual: se marca "ya asociado a N° …".
-3. **Exportar**: descarga un Excel nuevo con 3 hojas:
-   - **Asociaciones**: una fila por asociación (las novedades unidas de PCZ con sus avisos del LG),
-     con una **estructura fija** igual a la tabla madre, para copiar las filas y pegarlas a continuación:
+3. **Exportar**: descarga un Excel nuevo con 2 hojas:
+   - **Asociaciones**: **todas las novedades de PCZ, ordenadas por día** (dentro del día, en el orden
+     del PCZ; las de fecha no reconocida al final). Una fila por asociación (las novedades unidas de PCZ
+     con sus avisos del LG) y una fila por cada novedad sin asociar (descartada o sin revisar), con una
+     **estructura fija** igual a la tabla madre, para copiar las filas y pegarlas a continuación:
      N° · ID · Fecha · Mes · N° Novedad · Sistema · Subsistema · Parte · Elemento · Nombre correcto ·
-     Km. INPAN · BuscarV (Km. INPAN) · Modelo · Descripción.
+     Km. INPAN · BuscarV (Km. INPAN) · Modelo · Página · Descripción · Zona · VER · Falla · Comienzo de falla ·
+     Habilitación.
      - **N°**: consecutivo; el de la primera fila se escribe en pantalla y sube de a uno hacia abajo.
      - **Fecha**: la de la novedad de PCZ, con formato 19/9/2026.
      - **N° Novedad**: el de PCZ (si se unieron varias, separados por ` | `).
+     - **Página**: la del LG de los avisos asociados (si son de varias páginas, separadas por ` | `;
+       vacía si la novedad no tiene avisos).
      - **Descripción**: el texto de PCZ en MAYÚSCULAS, un renglón vacío y debajo el texto de los avisos
-       del LG tal como viene (cada uno en su renglón).
+       del LG tal como viene (cada uno en su renglón). Si la novedad no tiene avisos, solo el texto de PCZ.
      - ID, Mes, Sistema, Subsistema, Parte, Elemento, Nombre correcto, Km. INPAN, BuscarV y Modelo
        van **vacías**, para completarlas después.
-   - **PCZ sin asociar**: las novedades descartadas o sin revisar, con las columnas del Excel de PCZ.
+     - **Zona, VER, Falla, Comienzo de falla y Habilitación**: copiadas de PCZ tal como vienen (si se
+       unieron varias novedades, sus valores distintos separados por ` | `; vacías si el PCZ no las tiene).
    - **LG sin asociar**: los avisos que no quedaron en ninguna asociación, con las columnas del Excel
      de LG.
 

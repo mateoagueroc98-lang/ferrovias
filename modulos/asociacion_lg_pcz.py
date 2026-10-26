@@ -57,7 +57,8 @@ ARCHIVOS = [
         "N° Novedad": "Identifica cada novedad. En la hoja «Asociaciones», si una asociación tiene varias "
                       "novedades, sus N° se juntan en la misma celda separados por « | ».",
         "Hora": "Opcional. Suma puntos a las novedades con hora cercana a la de LG "
-                "(además de las horas escritas en la descripción).",
+                "(además de las horas escritas en la descripción). Si el PCZ no tiene columna de hora, "
+                "se usa «Comienzo de falla» (de su fecha y hora se toma solo la hora).",
     }, {"N° Novedad": FILA_EXCEL, "Hora": SIN_HORA}),
 ]
 
@@ -68,6 +69,8 @@ def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict,
 
     Los desplegables arrancan con lo que se reconoce por nombre. Las columnas opcionales tienen
     una opción especial (sin hora / usar número de fila) que deja el dato afuera del mapa.
+    Las columnas que solo se copian al Excel final (EXTRAS_LG, EXTRAS_PCZ) no tienen desplegable: se toman
+    solas si el archivo tiene una columna con ese nombre.
     """
     guardado = ss.get(P + "mapa_" + clave, {})
     if guardado.get("_firma") != firma:  # archivo nuevo: arrancar con lo reconocido por nombre
@@ -76,7 +79,7 @@ def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict,
             guardado.setdefault(canon, especial)
     if mostrar:
         columnas = list(df.columns)
-        mapa = {"_firma": firma}
+        mapa = {"_firma": firma, **{c: guardado[c] for c in a.EXTRAS_LG + a.EXTRAS_PCZ if c in guardado}}
         cols = st.columns(2)
         for k, canon in enumerate(ayudas):
             opciones = ([especiales[canon]] if canon in especiales else []) + columnas
@@ -122,7 +125,10 @@ def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, especiales: 
         if mostrar:
             st.warning("Falta elegir: " + ", ".join(f"**{c}**" for c in faltan) + ".")
         return None
-    if repetidas := sorted({c for c in mapa.values() if list(mapa.values()).count(c) > 1}):
+    # Las columnas que solo se copian al Excel final pueden repetirse (p. ej. «Comienzo de falla»
+    # también como Hora); las demás no
+    usadas = [c for canon, c in mapa.items() if canon not in a.EXTRAS_LG + a.EXTRAS_PCZ]
+    if repetidas := sorted({c for c in usadas if usadas.count(c) > 1}):
         st.error("Elegiste la misma columna para dos datos distintos: " + ", ".join(f"«{c}»" for c in repetidas))
         return None
     if mostrar:
@@ -205,17 +211,17 @@ avisos_lg = a.tabla_avisos(lg)
 if paso == PASOS[2]:
     st.header("Exportar a Excel", anchor=False)
     lg_resto = a.lg_sin_asociar(lg_original, lg, trabajo, mapa_lg)
-    pcz_resto = a.pcz_sin_asociar(pcz_original, pcz, trabajo)
     p = a.progreso(trabajo, len(pcz))
     m1, m2, m3 = st.columns(3)
     m1.metric("Novedades de PCZ asociadas", p["asociadas"])
-    m2.metric("Novedades de PCZ sin asociar", len(pcz_resto))
+    m2.metric("Novedades de PCZ sin asociar", p["total"] - p["asociadas"])
     m3.metric("Filas de LG sin asociar", len(lg_resto))
     if p["pendientes"]:
-        st.info(f"Quedan {p['pendientes']} novedad(es) de PCZ sin revisar: van a la hoja «PCZ sin asociar».")
-    st.caption("El Excel trae 3 hojas: **Asociaciones** (una fila por asociación), "
-               "**PCZ sin asociar** y **LG sin asociar** (estas dos con las mismas columnas que los "
-               "archivos originales).")
+        st.info(f"Quedan {p['pendientes']} novedad(es) de PCZ sin revisar: salen en la hoja «Asociaciones» "
+                "solo con su texto de PCZ.")
+    st.caption("El Excel trae 2 hojas: **Asociaciones** (todas las novedades de PCZ ordenadas por día: una fila "
+               "por asociación y una por cada novedad sin asociar) y **LG sin asociar** (con las mismas "
+               "columnas que el archivo original).")
 
     st.subheader("Hoja «Asociaciones»", anchor=False)
     numero_inicial = st.number_input(
@@ -223,17 +229,23 @@ if paso == PASOS[2]:
         help="Poné el número que sigue en tu tabla madre: las demás filas siguen de a uno hacia abajo.")
     ss[P + "numero_inicial"] = numero_inicial  # se recuerda si vas y volvés de este paso
     tabla = a.tabla_asociaciones(lg, pcz, trabajo, int(numero_inicial))
-    st.caption(f"Vista previa ({len(tabla)} asociación(es)):")
-    vista = tabla.head(20).copy()
-    vista["Fecha"] = vista["Fecha"].map(lambda f: f"{f.day}/{f.month}/{f.year}" if hasattr(f, "day") else f)
-    st.dataframe(vista.map(lambda v: "" if v is None or (not isinstance(v, str) and pd.isna(v)) else str(v)),
-                 hide_index=True, use_container_width=True)
+    st.caption(f"Vista previa ({len(tabla)} fila(s)):")
+    def como_en_excel(v) -> str:
+        """Valor como se va a ver en el Excel: fechas d/m/aaaa (y h:mm si tienen hora)."""
+        if v is None or (not isinstance(v, str) and pd.isna(v)):
+            return ""
+        if hasattr(v, "day"):
+            fecha = f"{v.day}/{v.month}/{v.year}"
+            return fecha + (f" {v.hour}:{v.minute:02d}" if getattr(v, "hour", 0) or getattr(v, "minute", 0) else "")
+        return str(v)
+
+    st.dataframe(tabla.head(20).map(como_en_excel), hide_index=True, use_container_width=True)
 
     nombre = st.text_input("Nombre del archivo a descargar", value="asociacion_LG_PCZ")
     # Sacar caracteres que Windows no acepta en nombres de archivo
     nombre = re.sub(r'[\\/:*?"<>|]', "", nombre).strip().removesuffix(".xlsx") or "asociacion_LG_PCZ"
     st.download_button(f"⬇️ Descargar {nombre}.xlsx",
-                       a.exportar(lg_original, pcz_original, lg, pcz, trabajo, mapa_lg, int(numero_inicial)),
+                       a.exportar(lg_original, lg, pcz, trabajo, mapa_lg, int(numero_inicial)),
                        f"{nombre}.xlsx", type="primary")
     st.stop()
 
@@ -324,6 +336,29 @@ def descartar():
         seguir()
 
 
+def desechar(k: int):
+    """🗑️ al lado de una tarjeta: descarta solo esa novedad, sin tocar lo tildado en las demás."""
+    a.descartar(trabajo, [k])
+    b = borrador()
+    if k in b["novedades"]:
+        b["novedades"].remove(k)
+    if not b["novedades"]:
+        b["etapa"] = "pcz"
+    if not a.pendientes(trabajo, del_dia()):
+        seguir()
+
+
+def marcar(k: int, color: str):
+    """Marca la novedad y también las unidas con ella: las de su asociación o las tildadas juntas."""
+    asociacion = a.asociacion_de(trabajo)
+    if k in asociacion:
+        juntas = trabajo["asociaciones"][asociacion[k]]["novedades"]
+    else:
+        tildadas = borrador()["novedades"]
+        juntas = tildadas if k in tildadas else []
+    a.marcar(trabajo, k, color, juntas)
+
+
 def quitar(i: int):
     a.quitar_asociacion(trabajo, i)
     ss[P + "ver"] += 1
@@ -348,11 +383,35 @@ mark { background: #FFE27A; color: inherit; padding: 0 .1em; border-radius: 2px;
 .tj-pcz { border-left: 4px solid #D41920;
           background: linear-gradient(90deg, rgba(212, 25, 32, 0.08), rgba(212, 25, 32, 0.02)); }
 .tj-hecha { opacity: 0.5; filter: grayscale(1); }
+/* Marcas: la tarjeta toma el color con el que se va a resaltar su fila en el Excel */
+.tj-pcz.tj-amarilla { background: #FFF3B0; }
+.tj-pcz.tj-naranja { background: #FFD9A8; }
+.tj-hecha.tj-amarilla, .tj-hecha.tj-naranja { filter: none; opacity: 0.6; }
+[class*="st-key-tarjeta_p"][class*="_amarilla"]:has(input) { background: #FFF3B0; }
+[class*="st-key-tarjeta_p"][class*="_naranja"]:has(input) { background: #FFD9A8; }
+/* Botonera chica a la izquierda de cada novedad: 🗑️ descartar · ! amarilla · !! naranja */
+[class*="st-key-botonera_"] { gap: 0.25rem; }
+[class*="st-key-bt_"], [class*="st-key-bt_"] > div { width: 100% !important; }
+[class*="st-key-bt_"] button { min-height: 1.7rem; height: 1.7rem; padding: 0; width: 100%;
+                               font-weight: 800; line-height: 1; color: #1C1A19; }
+[class*="st-key-bt_tacho"] button { background: #E4E2E0 !important; border: 1px solid #C9C6C3; }
+[class*="st-key-bt_amarilla"] button { background: #FFE45C !important; border: 1px solid #C98A00; }
+[class*="st-key-bt_naranja"] button { background: #FFA733 !important; border: 1px solid #C46A00; }
+[class*="st-key-bt_amarilla"]:not([class*="_on"]) button,
+[class*="st-key-bt_naranja"]:not([class*="_on"]) button { opacity: 0.5; }
+[class*="st-key-bt_"][class*="_on"] button { box-shadow: inset 0 0 0 2px #1C1A19; }
+[class*="st-key-bt_"] button:hover { opacity: 1; color: #1C1A19; filter: brightness(0.95); }
 .tj-vacia { border-style: dashed; opacity: 0.55; text-align: center; font-size: 0.9rem; }
 .tj-num { font-size: 0.78rem; font-weight: 600; opacity: 0.7; margin-bottom: 0.15rem; }
 .tj-aviso { font-size: 0.8rem; color: #8A5E00; margin-top: 0.25rem; }
 .col-titulo { font-size: 0.85rem; font-weight: 600; opacity: 0.55; margin-bottom: 0.3rem; }
 .flecha { text-align: center; font-size: 1.4rem; opacity: 0.45; padding-top: 0.6rem; }
+/* Streamlit envuelve el contenedor en un stLayoutWrapper de su mismo tamaño: lo pegajoso es el envoltorio */
+[data-testid="stLayoutWrapper"]:has(> .st-key-barra_acciones) { position: sticky; bottom: 0; z-index: 50; }
+.st-key-barra_acciones { padding: 0.7rem 0 0.8rem;
+                         background: rgba(244, 243, 242, 0.94); backdrop-filter: blur(4px);
+                         border-top: 1px solid rgba(28, 26, 25, 0.15);
+                         box-shadow: 0 -8px 14px -10px rgba(28, 26, 25, 0.35); }
 .pasos { font-size: 0.95rem; margin: 0.2rem 0 0.6rem 0; }
 .pasos .off { opacity: 0.4; }
 </style>""")
@@ -372,8 +431,12 @@ def titulo_novedad(k: int) -> str:
     return f"N° {pcz.loc[k, 'id']}" + (f" · {hora}" if hora else "")
 
 
+def color_de(k: int) -> str:
+    return trabajo.get("marcas", {}).get(k) or "sin"
+
+
 def html_pcz(k: int, hecha: bool = False) -> str:
-    return (f"<div class='tj tj-pcz{' tj-hecha' if hecha else ''}'><div class='tj-num'>{titulo_novedad(k)}</div>"
+    return (f"<div class='tj tj-pcz tj-{color_de(k)}{' tj-hecha' if hecha else ''}'><div class='tj-num'>{titulo_novedad(k)}</div>"
             f"{a.resaltar(pcz.loc[k, 'descripcion'] or '(sin descripción)', set())}</div>")
 
 
@@ -385,6 +448,22 @@ def html_aviso(clave_aviso: str, hecha: bool = False, novedades_propias=()) -> s
     return (f"<div class='tj tj-lg{' tj-hecha' if hecha else ''}'><div class='tj-num'>LG fila {av['fila_lg'] + 1}"
             f" · {a.formatear_fecha(av['fecha'])}{' · ' + hora if hora else ''}</div>"
             f"{a.resaltar(av['texto'], set())}{aviso_otras}</div>")
+
+
+def con_botonera(k: int, tarjeta, tacho: bool = True):
+    """Tarjeta de una novedad con sus botones chicos a la izquierda (🗑️ si está pendiente, ! y !!)."""
+    color = color_de(k)
+    cb, cc = st.columns([1, 8], gap="small")
+    with cb, st.container(key=f"botonera_{ver}_{k}"):
+        if tacho:
+            st.button("🗑️", key=f"bt_tacho_{ver}_{k}", on_click=desechar, args=(k,),
+                      help="Descartar esta novedad: sale en el Excel solo con su texto de PCZ.")
+        for marca, texto, nombre in [("amarilla", "!", "amarillo"), ("naranja", "!!", "naranja")]:
+            activa = color == marca
+            st.button(texto, key=f"bt_{marca}_{ver}_{k}{'_on' if activa else ''}", on_click=marcar, args=(k, marca),
+                      help=("Sacar la marca" if activa else f"Resaltar en {nombre} su fila del Excel final"))
+    with cc:
+        tarjeta()
 
 
 def html_vacia(texto: str, hecha: bool = False) -> str:
@@ -455,7 +534,9 @@ with st.container(border=True):
                 hechas.update(propias)
 
                 def izq(propias=propias):
-                    st.markdown("".join(html_pcz(x, hecha=True) for x in propias), unsafe_allow_html=True)
+                    for x in propias:
+                        con_botonera(x, lambda x=x: st.markdown(html_pcz(x, hecha=True), unsafe_allow_html=True),
+                                     tacho=False)
 
                 def der(g=g, i=i):
                     st.markdown("".join(html_aviso(c, True, g["novedades"]) for c in g["avisos"]
@@ -465,7 +546,7 @@ with st.container(border=True):
                 fila_tabla(izq, der)
             elif k in trabajo["descartadas"]:
                 def izq(k=k):
-                    st.markdown(html_pcz(k, hecha=True), unsafe_allow_html=True)
+                    con_botonera(k, lambda: st.markdown(html_pcz(k, hecha=True), unsafe_allow_html=True), tacho=False)
 
                 def der(k=k):
                     st.markdown(html_vacia("🗑️ descartada (sin aviso en el LG)", hecha=True), unsafe_allow_html=True)
@@ -475,34 +556,30 @@ with st.container(border=True):
             else:
                 orden = pend_dia.index(k) + 1
 
-                def izq(k=k, orden=orden):
-                    with st.container(border=True, key=f"tarjeta_p_{ver}_{k}"):
+                def tarjeta(k=k, orden=orden):
+                    with st.container(border=True, key=f"tarjeta_p_{ver}_{k}_{color_de(k)}"):
                         clave = f"{P}nov_{ver}_{k}"
                         st.checkbox(f"\\[{orden}\\] {titulo_novedad(k)}", value=k in b["novedades"], key=clave,
                                     on_change=tildar, args=("novedades", k, clave))
                         st.markdown(a.resaltar(pcz.loc[k, "descripcion"] or "(sin descripción)", set()),
                                     unsafe_allow_html=True)
 
+                def izq(k=k, tarjeta=tarjeta):
+                    con_botonera(k, tarjeta)
+
                 def der():
                     st.markdown(html_vacia("pendiente"), unsafe_allow_html=True)
 
                 fila_tabla(izq, der, flecha=False)
 
-        bc = st.columns([1.4, 1.2, 1, 1.4])
-        bc[0].button("➡️ Elegir avisos del LG", type="primary", on_click=ir_a_avisos, disabled=not b["novedades"],
-                     use_container_width=True)
-        bc[1].button("🗑️ Descartar", on_click=descartar, disabled=not b["novedades"], use_container_width=True,
-                     help="Las novedades tildadas no tienen aviso en el LG: van a la hoja «PCZ sin asociar».")
-        if len(pend_dia) > 1:
-            bc[2].button("☑ Todas", on_click=todas_las_pendientes, use_container_width=True,
-                         help="Tilda todas las novedades pendientes del día.")
     else:
         # ------------------------------------- Paso 2: elegir avisos del LG
         st.caption("Tildá abajo uno o varios avisos del LG: van apareciendo a la derecha. Después tocá «Asociar».")
         titulos_tabla("Avisos elegidos")
 
         def izq_nueva():
-            st.markdown("".join(html_pcz(k) for k in b["novedades"]), unsafe_allow_html=True)
+            for k in list(b["novedades"]):
+                con_botonera(k, lambda k=k: st.markdown(html_pcz(k), unsafe_allow_html=True))
 
         def der_nueva():
             if b["avisos"]:
@@ -512,12 +589,6 @@ with st.container(border=True):
                 st.markdown(html_vacia("todavía ninguno ↓ tildalos en la lista de abajo"), unsafe_allow_html=True)
 
         fila_tabla(izq_nueva, der_nueva)
-        bc = st.columns([1.3, 1.3, 1.3, 1.7])
-        bc[0].button("✅ Asociar", type="primary", on_click=asociar, disabled=not b["avisos"],
-                     use_container_width=True)
-        bc[1].button("🗑️ Descartar", on_click=descartar, use_container_width=True,
-                     help="Estas novedades no tienen aviso en el LG: van a la hoja «PCZ sin asociar».")
-        bc[2].button("⬅️ Volver a las novedades", on_click=volver_a_novedades, use_container_width=True)
 
 # ---------------------------------------------------------- avisos del LG
 if b["etapa"] == "lg":
@@ -613,6 +684,34 @@ if b["etapa"] == "lg":
     if len(sin_fecha):
         with st.expander(f"Avisos del LG sin fecha reconocible ({len(sin_fecha)})"):
             mostrar(sin_fecha, dibujadas + 1, "SIN FECHA", "sin_fecha")
+
+# ------------------------------------------------- botones de acción
+# Van al final de la página y quedan pegados abajo de la pantalla mientras se hace scroll
+# (position: sticky), así siempre están a mano.
+with st.container(key="barra_acciones"):
+    # (ancho, texto, argumentos de st.button)
+    if b["etapa"] == "pcz":
+        botones = [
+            (1.4, "➡️ Elegir avisos del LG", dict(type="primary", on_click=ir_a_avisos, disabled=not b["novedades"])),
+            (1.2, "🗑️ Descartar", dict(on_click=descartar, disabled=not b["novedades"],
+                                       help="Las novedades tildadas no tienen aviso en el LG: salen en el Excel "
+                                            "solo con su texto de PCZ.")),
+        ]
+        if len(pend_dia) > 1:
+            botones.append((1, "☑ Todas", dict(on_click=todas_las_pendientes,
+                                               help="Tilda todas las novedades pendientes del día.")))
+    else:
+        botones = [
+            (1.3, "✅ Asociar", dict(type="primary", on_click=asociar, disabled=not b["avisos"])),
+            (1.3, "🗑️ Descartar", dict(on_click=descartar, help="Estas novedades no tienen aviso en el LG: salen "
+                                                                "en el Excel solo con su texto de PCZ.")),
+            (1.6, "⬅️ Volver a las novedades", dict(on_click=volver_a_novedades)),
+        ]
+    # Columnas vacías a los costados para que los botones queden centrados
+    margen = (5.5 - sum(ancho for ancho, _, _ in botones)) / 2
+    columnas = st.columns([margen] + [ancho for ancho, _, _ in botones] + [margen])
+    for col, (_, texto, opciones) in zip(columnas[1:-1], botones):
+        col.button(texto, use_container_width=True, **opciones)
 
 # Atajos de teclado: se engancha un único listener en la página (se reemplaza en cada recarga)
 # y solo actúa si los botones de esta pantalla están visibles.

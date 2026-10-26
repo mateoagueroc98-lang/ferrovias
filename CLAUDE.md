@@ -40,11 +40,15 @@ descargar con nombre elegido. Las claves se normalizan (101 == 101.0, fechas sin
 **Asociación LG ↔ PCZ**: la principal es PCZ. Se recorre día por día (todos los días del PCZ): se
 eligen una o varias novedades del día (se unen) y después los avisos del LG (cada renglón de la
 transcripción) para asociarlas, o se descartan. Lo resuelto queda en gris hasta cambiar de día.
+Cada novedad tiene a la izquierda 🗑️ (descartar solo esa) y ! / !! (marca amarilla / naranja: resalta su
+fila en el Excel final; las novedades unidas —tildadas juntas o asociadas— comparten la marca, y al
+asociar con marcas distintas gana la naranja).
 Candidatos solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple
 sin IA. El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas
-Asociaciones (una fila por asociación; estructura fija de 14 columnas `COLUMNAS_SALIDA`, N° consecutivo
-desde el número que se elige, Fecha d/m/yyyy, Descripción = PCZ en MAYÚSCULAS + renglón vacío + LG), LG sin asociar y PCZ sin asociar
-(columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
+Asociaciones (TODAS las novedades de PCZ ordenadas por día: una fila por asociación y una por novedad sin
+asociar; estructura fija de 20 columnas `COLUMNAS_SALIDA`, con «Página» del LG antes de «Descripción» y las últimas 5
+copiadas de PCZ: `EXTRAS_PCZ`, N° consecutivo desde el número que se elige,
+Fecha d/m/yyyy, Descripción = PCZ en MAYÚSCULAS + renglón vacío + LG) y LG sin asociar (columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
 
 **Concatenación**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por
 número de novedad (Nro, Fecha, Hora inicio, Hora fin, Detalle). Hora fin = hora del último renglón cuyo
