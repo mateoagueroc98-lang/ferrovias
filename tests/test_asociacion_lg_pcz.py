@@ -292,6 +292,46 @@ def test_tabla_asociaciones_ordena_por_dia_aunque_el_pcz_venga_desordenado():
     assert t.iloc[1]["Descripción"] == "D\n\nAviso"
 
 
+# ------------------------------------------- unir novedades de distintos días
+def test_novedades_para_unir_de_otro_dia(tmp_path):
+    _, _, lg, pcz = _cargar_ejemplos(tmp_path)
+    s = _trabajo_ejemplo(pcz)
+    pos = {n: k for k, n in enumerate(pcz["id"])}
+    t = a.novedades_para_unir(pcz, s, [pos["1001"]], excluir_dia=F(2025, 3, 4))
+    ids = list(t["id"])
+    assert "1001" not in ids and "1005" not in ids    # nada del mismo día
+    assert "1022" not in ids                         # ya asociada
+    assert "1025" == ids[0]                          # «Señal 14 Boulogne intermitente»: la más parecida
+    assert "1030" in ids                             # sin fecha: también se puede unir
+    solo_5 = a.novedades_para_unir(pcz, s, [pos["1001"]], excluir_dia=F(2025, 3, 4), dia=F(2025, 3, 5))
+    assert set(solo_5["fecha"]) == {F(2025, 3, 5)}
+    busqueda = a.novedades_para_unir(pcz, s, [pos["1001"]], excluir_dia=F(2025, 3, 4), texto="boulogne")
+    assert list(busqueda["id"]) == ["1025", "1015"]
+
+
+def test_opciones_union():
+    df = pd.DataFrame({"Fecha": ["05/03/2025", "04/03/2025"], "Descripcion": ["A", "B"], "N": [1015, 1001]})
+    pcz = a.preparar_pcz(df, {"Fecha": "Fecha", "Descripción": "Descripcion", "N° Novedad": "N"})
+    fechas, numeros = a.opciones_union(pcz, [0, 1])
+    assert fechas == [F(2025, 3, 4), F(2025, 3, 5)]
+    assert numeros == ["1001", "1015", "1001 | 1015"]  # por fecha
+
+
+def test_asociar_unidas_de_distintos_dias_con_fecha_y_numero_elegidos():
+    df = pd.DataFrame({"Fecha": ["04/03/2025", "05/03/2025", "06/03/2025"],
+                       "Descripcion": ["Falla señal 14", "Señal 14 normalizada", "Otra"], "N": [1, 2, 3]})
+    pcz = a.preparar_pcz(df, {"Fecha": "Fecha", "Descripción": "Descripcion", "N° Novedad": "N"})
+    lg = a.preparar_lg(pd.DataFrame({"Fecha": ["04/03/2025", "05/03/2025"], "T": ["Falla señal 14", "Normalizada"]}),
+                       {"Fecha": "Fecha", "Transcripción": "T"})
+    nov = a.novedad_combinada(pcz, [0, 1])
+    assert set(a.candidatos(nov, a.tabla_avisos(lg))["clave"]) == {"0:0", "1:0"}  # avisos de los dos días
+    s = a.trabajo_nuevo("h")
+    a.asociar(s, [0, 1], ["0:0", "1:0"], fecha=F(2025, 3, 5), numero="2")
+    t = a.tabla_asociaciones(lg, pcz, s)
+    assert list(t["N° Novedad"]) == [2, 3] and t.iloc[0]["Fecha"] == F(2025, 3, 5)
+    assert t.iloc[0]["Descripción"] == "FALLA SEÑAL 14\nSEÑAL 14 NORMALIZADA\n\nFalla señal 14\nNormalizada"
+
+
 def test_sin_asociar_conserva_columnas_originales(tmp_path):
     lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
     s = _trabajo_ejemplo(pcz)
