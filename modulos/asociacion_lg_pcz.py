@@ -29,6 +29,16 @@ def preparar(nombre_lg, bytes_lg, nombre_pcz, bytes_pcz, mapa_lg, mapa_pcz):
     return lg, pcz
 
 
+def como_en_excel(v) -> str:
+    """Valor como se va a ver en el Excel: fechas d/m/aaaa (y h:mm si tienen hora)."""
+    if v is None or (not isinstance(v, str) and pd.isna(v)):
+        return ""
+    if hasattr(v, "day"):
+        fecha = f"{v.day}/{v.month}/{v.year}"
+        return fecha + (f" {v.hour}:{v.minute:02d}" if getattr(v, "hour", 0) or getattr(v, "minute", 0) else "")
+    return str(v)
+
+
 def ir_a_paso(paso: str):
     ss[P + "paso"] = paso
 
@@ -230,15 +240,6 @@ if paso == PASOS[2]:
     ss[P + "numero_inicial"] = numero_inicial  # se recuerda si vas y volvés de este paso
     tabla = a.tabla_asociaciones(lg, pcz, trabajo, int(numero_inicial))
     st.caption(f"Vista previa ({len(tabla)} fila(s)):")
-    def como_en_excel(v) -> str:
-        """Valor como se va a ver en el Excel: fechas d/m/aaaa (y h:mm si tienen hora)."""
-        if v is None or (not isinstance(v, str) and pd.isna(v)):
-            return ""
-        if hasattr(v, "day"):
-            fecha = f"{v.day}/{v.month}/{v.year}"
-            return fecha + (f" {v.hour}:{v.minute:02d}" if getattr(v, "hour", 0) or getattr(v, "minute", 0) else "")
-        return str(v)
-
     st.dataframe(tabla.head(20).map(como_en_excel), hide_index=True, use_container_width=True)
 
     nombre = st.text_input("Nombre del archivo a descargar", value="asociacion_LG_PCZ")
@@ -308,8 +309,8 @@ def volver_a_novedades():
     b = borrador()
     b["etapa"] = "pcz"
     b["novedades"] = [k for k in b["novedades"] if k in del_dia()]
-    b.pop("fecha", None)
-    b.pop("numero", None)
+    for clave in ("fecha", "numero", "extras"):
+        b.pop(clave, None)
 
 
 def abrir_union():
@@ -338,7 +339,7 @@ def seguir():
 def asociar():
     b = borrador()
     if b["novedades"] and b["avisos"]:
-        a.asociar(trabajo, b["novedades"], b["avisos"], b.get("fecha"), b.get("numero"))
+        a.asociar(trabajo, b["novedades"], b["avisos"], b.get("fecha"), b.get("numero"), b.get("extras"))
         seguir()
 
 
@@ -355,8 +356,8 @@ def desechar(k: int):
     b = borrador()
     if k in b["novedades"]:
         b["novedades"].remove(k)
-        b.pop("fecha", None)  # si era una unión con otro día, vuelven la fecha y los N° de siempre
-        b.pop("numero", None)
+        for clave in ("fecha", "numero", "extras"):  # si era una unión con otro día, vuelve lo de siempre
+            b.pop(clave, None)
     if not b["novedades"]:
         b["etapa"] = "pcz"
     if not a.pendientes(trabajo, del_dia()):
@@ -607,8 +608,10 @@ with st.container(border=True):
 
         fila_tabla(izq_nueva, der_nueva)
         if "fecha" in b or "numero" in b:
-            st.caption(f"📅 Unidas con otro día. En el Excel van con **Fecha {a.formatear_fecha(b.get('fecha'))}** y "
-                       f"**N° Novedad {b.get('numero', '')}** (para cambiarlo, tocá «📅 Unir con otro día»).")
+            elegidos = "".join(f" · **{n}:** {' | '.join(como_en_excel(v) for v in vs) or '(vacía)'}"
+                               for n, vs in b.get("extras", {}).items())
+            st.caption(f"📅 Unidas con otro día. En el Excel van con **Fecha {a.formatear_fecha(b.get('fecha'))}** · "
+                       f"**N° Novedad {b.get('numero', '')}**{elegidos} (para cambiarlo, tocá «📅 Unir con otro día»).")
 
 # ---------------------------------------------------------- avisos del LG
 if b["etapa"] == "lg":
@@ -761,12 +764,20 @@ def ventana_union():
                          key=f"{P}un_fecha_{u['abierta']}") if fechas else None
         numero = c2.radio("N° Novedad para el Excel", numeros, index=len(numeros) - 1,
                           key=f"{P}un_numero_{u['abierta']}")
+        # Comienzo de falla / Habilitación: si las novedades traen valores distintos, se elige uno o varios
+        extras = {}
+        columnas_extra = [(n, v) for n in a.ELEGIBLES_UNION if len(v := a.valores_union(pcz, todas, n)) > 1]
+        for col, (nombre, valores) in zip(st.columns(2) if columnas_extra else [], columnas_extra):
+            col.markdown(f"<div style='font-size:0.875rem'>{nombre} para el Excel (una o varias)</div>",
+                         unsafe_allow_html=True)
+            extras[nombre] = [v for i, (v, ids) in enumerate(valores) if col.checkbox(
+                f"{como_en_excel(v)} — N° {', '.join(ids)}", value=True, key=f"{P}un_{nombre}_{u['abierta']}_{i}")]
         d1, d2 = st.columns(2)
         if d1.button("⬅️ Volver a buscar", use_container_width=True):
             u["etapa"] = "buscar"
             st.rerun(scope="fragment")
         if d2.button("✅ Confirmar y elegir avisos del LG", type="primary", use_container_width=True):
-            b.update(novedades=todas, etapa="lg", numero=numero)
+            b.update(novedades=todas, etapa="lg", numero=numero, extras=extras)
             if fecha is not None:
                 b["fecha"] = fecha
             st.rerun()

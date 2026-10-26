@@ -332,6 +332,23 @@ def test_asociar_unidas_de_distintos_dias_con_fecha_y_numero_elegidos():
     assert t.iloc[0]["Descripción"] == "FALLA SEÑAL 14\nSEÑAL 14 NORMALIZADA\n\nFalla señal 14\nNormalizada"
 
 
+def test_union_elegir_comienzo_de_falla_y_habilitacion():
+    c1, c2 = pd.Timestamp(2025, 3, 4, 8, 10), pd.Timestamp(2025, 3, 5, 9, 0)
+    h1, h2 = pd.Timestamp(2025, 3, 4, 9, 0), pd.Timestamp(2025, 3, 5, 11, 30)
+    df = pd.DataFrame({"Fecha": ["05/03/2025", "04/03/2025"], "Descripcion": ["B", "A"], "N": [2, 1],
+                       "Comienzo de falla": [c2, c1], "Habilitación": [h2, h1]})
+    mapa = {"Fecha": "Fecha", "Descripción": "Descripcion", "N° Novedad": "N",
+            "Comienzo de falla": "Comienzo de falla", "Habilitación": "Habilitación"}
+    pcz = a.preparar_pcz(df, mapa)
+    assert a.valores_union(pcz, [0, 1], "Comienzo de falla") == [(c1, ["1"]), (c2, ["2"])]  # por fecha
+    lg = a.preparar_lg(pd.DataFrame({"Fecha": ["04/03/2025"], "T": ["X"]}), {"Fecha": "Fecha", "Transcripción": "T"})
+    s = a.trabajo_nuevo("h")
+    a.asociar(s, [0, 1], ["0:0"], extras={"Comienzo de falla": [c1], "Habilitación": [h1, h2]})
+    fila = a.tabla_asociaciones(lg, pcz, s).iloc[0]
+    assert fila["Comienzo de falla"] == c1                                  # uno solo: fecha y hora
+    assert fila["Habilitación"] == "04/03/2025 09:00 | 05/03/2025 11:30"     # varios: juntos
+
+
 def test_sin_asociar_conserva_columnas_originales(tmp_path):
     lg_df, pcz_df, lg, pcz = _cargar_ejemplos(tmp_path)
     s = _trabajo_ejemplo(pcz)
