@@ -43,7 +43,6 @@ if msg := ss.pop(P + "msg", None):
 # ===================================================================== 1. Carga
 SIN_HORA = "— no tiene hora —"
 FILA_EXCEL = "— usar el número de fila del Excel —"
-NO_ESTA = "— no está en el archivo (queda vacía) —"
 ARCHIVOS = [
     # clave, título, columnas, ayuda por columna, opción especial de las opcionales
     ("lg", "Libro de Guardia (LG)", a.COLUMNAS_LG, {
@@ -60,9 +59,7 @@ ARCHIVOS = [
         "Hora": "Opcional. Suma puntos a las novedades con hora cercana a la de LG "
                 "(además de las horas escritas en la descripción). Si el PCZ no tiene columna de hora, "
                 "se usa «Comienzo de falla» (de su fecha y hora se toma solo la hora).",
-        **{nombre: f"Opcional. Se copia tal cual a la columna «{nombre}» del Excel final."
-           for nombre in a.EXTRAS_PCZ},
-    }, {"N° Novedad": FILA_EXCEL, "Hora": SIN_HORA, **{nombre: NO_ESTA for nombre in a.EXTRAS_PCZ}}),
+    }, {"N° Novedad": FILA_EXCEL, "Hora": SIN_HORA}),
 ]
 
 
@@ -72,6 +69,8 @@ def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict,
 
     Los desplegables arrancan con lo que se reconoce por nombre. Las columnas opcionales tienen
     una opción especial (sin hora / usar número de fila) que deja el dato afuera del mapa.
+    Las columnas que solo se copian al Excel final (EXTRAS_PCZ) no tienen desplegable: se toman
+    solas si el archivo tiene una columna con ese nombre.
     """
     guardado = ss.get(P + "mapa_" + clave, {})
     if guardado.get("_firma") != firma:  # archivo nuevo: arrancar con lo reconocido por nombre
@@ -80,23 +79,18 @@ def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict,
             guardado.setdefault(canon, especial)
     if mostrar:
         columnas = list(df.columns)
-        mapa = {"_firma": firma}
+        mapa = {"_firma": firma, **{c: guardado[c] for c in a.EXTRAS_PCZ if c in guardado}}
         cols = st.columns(2)
-        k = 0
-        for canon in ayudas:
-            if canon == a.EXTRAS_PCZ[0]:  # las que solo se copian al Excel final, aparte
-                st.caption("Columnas que se copian al Excel final (después de «Descripción»):")
-                cols, k = st.columns(2), 0
+        for k, canon in enumerate(ayudas):
             opciones = ([especiales[canon]] if canon in especiales else []) + columnas
             actual = guardado.get(canon)
             elegida = cols[k % 2].selectbox(
-                canon + (" (opcional)" if canon == "Hora" or canon in a.EXTRAS_PCZ else ""), opciones,
+                canon + (" (opcional)" if canon == "Hora" else ""), opciones,
                 index=opciones.index(actual) if actual in opciones else None,
                 placeholder="Elegí la columna", help=ayudas[canon], key=f"{P}col_{clave}_{canon}_{firma}",
             )
             if elegida is not None:
                 mapa[canon] = elegida
-            k += 1
         ss[P + "mapa_" + clave] = guardado = mapa
     return {k: v for k, v in guardado.items() if k != "_firma" and v not in especiales.values()}
 

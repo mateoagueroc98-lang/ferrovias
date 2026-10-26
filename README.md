@@ -27,8 +27,9 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
 
 **Archivos que necesita** (las columnas pueden llamarse como sea: al cargar elegís cuál es cada dato):
 - **LG**: Fecha y Transcripción (cada fila es un párrafo; cada renglón es un aviso) y, si hay, Hora.
-- **PCZ**: Fecha, Descripción, N° Novedad y, si hay, Hora. Además, opcionales que solo se copian al Excel
-  final: Zona, VER, Falla, Comienzo de falla y Habilitación.
+- **PCZ**: Fecha, Descripción, N° Novedad y, si hay, Hora. Además, si el archivo las tiene (se reconocen
+  solas por nombre, sin desplegable), se copian al Excel final: Zona, VER, Falla, Comienzo de falla y
+  Habilitación.
 - **N° Novedad** es lo que identifica cada novedad. En la hoja `Asociaciones`, si una asociación tiene
   varias novedades, sus N° se juntan en la misma celda separados por ` | `. Si el archivo no tiene esa
   columna, se puede usar el número de fila del Excel.
