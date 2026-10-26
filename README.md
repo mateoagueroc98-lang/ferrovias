@@ -27,6 +27,7 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
 
 **Archivos que necesita** (las columnas pueden llamarse como sea: al cargar elegís cuál es cada dato):
 - **LG**: Fecha y Transcripción (cada fila es un párrafo; cada renglón es un aviso) y, si hay, Hora.
+  Si tiene una columna «Página» (o «Pág»), se copia sola al Excel final (sin desplegable).
 - **PCZ**: Fecha, Descripción, N° Novedad y, si hay, Hora. Además, si el archivo las tiene (se reconocen
   solas por nombre, sin desplegable), se copian al Excel final: Zona, VER, Falla, Comienzo de falla y
   Habilitación.
@@ -82,11 +83,13 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
      con sus avisos del LG) y una fila por cada novedad sin asociar (descartada o sin revisar), con una
      **estructura fija** igual a la tabla madre, para copiar las filas y pegarlas a continuación:
      N° · ID · Fecha · Mes · N° Novedad · Sistema · Subsistema · Parte · Elemento · Nombre correcto ·
-     Km. INPAN · BuscarV (Km. INPAN) · Modelo · Descripción · Zona · VER · Falla · Comienzo de falla ·
+     Km. INPAN · BuscarV (Km. INPAN) · Modelo · Página · Descripción · Zona · VER · Falla · Comienzo de falla ·
      Habilitación.
      - **N°**: consecutivo; el de la primera fila se escribe en pantalla y sube de a uno hacia abajo.
      - **Fecha**: la de la novedad de PCZ, con formato 19/9/2026.
      - **N° Novedad**: el de PCZ (si se unieron varias, separados por ` | `).
+     - **Página**: la del LG de los avisos asociados (si son de varias páginas, separadas por ` | `;
+       vacía si la novedad no tiene avisos).
      - **Descripción**: el texto de PCZ en MAYÚSCULAS, un renglón vacío y debajo el texto de los avisos
        del LG tal como viene (cada uno en su renglón). Si la novedad no tiene avisos, solo el texto de PCZ.
      - ID, Mes, Sistema, Subsistema, Parte, Elemento, Nombre correcto, Km. INPAN, BuscarV y Modelo

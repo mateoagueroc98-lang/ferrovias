@@ -44,7 +44,8 @@ asociar con marcas distintas gana la naranja).
 Candidatos solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple
 sin IA. El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas
 Asociaciones (TODAS las novedades de PCZ ordenadas por día: una fila por asociación y una por novedad sin
-asociar; estructura fija de 19 columnas `COLUMNAS_SALIDA`, las últimas 5 copiadas de PCZ: `EXTRAS_PCZ`, N° consecutivo desde el número que se elige,
+asociar; estructura fija de 20 columnas `COLUMNAS_SALIDA`, con «Página» del LG antes de «Descripción» y las últimas 5
+copiadas de PCZ: `EXTRAS_PCZ`, N° consecutivo desde el número que se elige,
 Fecha d/m/yyyy, Descripción = PCZ en MAYÚSCULAS + renglón vacío + LG) y LG sin asociar (columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
 
 **Concatenación**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por

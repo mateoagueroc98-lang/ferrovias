@@ -21,7 +21,10 @@ COLUMNAS_LG = {
     "Fecha": lambda c: c == "fecha",
     "Transcripción": lambda c: c == "transcripcion",
     "Hora": lambda c: c.startswith("hora"),
+    # Solo se copia al Excel final (a la izquierda de «Descripción»)
+    "Página": lambda c: c.startswith("pagina") or c in ("pag", "pg"),
 }
+EXTRAS_LG = ("Página",)
 COLUMNAS_PCZ = {
     "Fecha": lambda c: c == "fecha",
     "Descripción": lambda c: c == "descripcion",
@@ -582,6 +585,7 @@ COLUMNAS_SALIDA = {
     "Km. INPAN": None,
     "BuscarV (Km. INPAN)": None,
     "Modelo": None,
+    "Página": "Página del LG de los avisos asociados (si son de varias: «12 | 13»).",
     "Descripción": "Texto de PCZ en MAYÚSCULAS, un renglón vacío y abajo el texto del LG tal como viene.",
     # De PCZ, tal como vienen (si se unieron varias novedades: valores distintos con « | »)
     **{nombre: f"Columna «{nombre}» de PCZ." for nombre in EXTRAS_PCZ},
@@ -651,6 +655,11 @@ def tabla_asociaciones(lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, numer
         fila["N° Novedad"] = (int(ids[0]) if ids[0].isdigit() else ids[0]) if len(ids) == 1 else " | ".join(ids)
         fila["Descripción"] = texto_descripcion([pcz.loc[k, "descripcion"] for k in novs],
                                                 [lg.loc[i, "avisos"][j] for i, j in claves])
+        paginas = list(dict.fromkeys(p for p in (lg.loc[i, "pagina"] for i, _ in claves) if p))
+        if len(paginas) == 1:
+            fila["Página"] = int(paginas[0]) if paginas[0].isdigit() else paginas[0]
+        elif paginas:
+            fila["Página"] = " | ".join(paginas)
         for nombre in EXTRAS_PCZ:
             valores = [v for v in (pcz.loc[k, nombre] for k in novs) if _texto_celda(v)]
             fila[nombre] = (_sin_hora(valores[0]) if len({_texto_celda(v) for v in valores}) == 1

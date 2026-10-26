@@ -69,7 +69,7 @@ def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict,
 
     Los desplegables arrancan con lo que se reconoce por nombre. Las columnas opcionales tienen
     una opción especial (sin hora / usar número de fila) que deja el dato afuera del mapa.
-    Las columnas que solo se copian al Excel final (EXTRAS_PCZ) no tienen desplegable: se toman
+    Las columnas que solo se copian al Excel final (EXTRAS_LG, EXTRAS_PCZ) no tienen desplegable: se toman
     solas si el archivo tiene una columna con ese nombre.
     """
     guardado = ss.get(P + "mapa_" + clave, {})
@@ -79,7 +79,7 @@ def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict,
             guardado.setdefault(canon, especial)
     if mostrar:
         columnas = list(df.columns)
-        mapa = {"_firma": firma, **{c: guardado[c] for c in a.EXTRAS_PCZ if c in guardado}}
+        mapa = {"_firma": firma, **{c: guardado[c] for c in a.EXTRAS_LG + a.EXTRAS_PCZ if c in guardado}}
         cols = st.columns(2)
         for k, canon in enumerate(ayudas):
             opciones = ([especiales[canon]] if canon in especiales else []) + columnas
@@ -127,7 +127,7 @@ def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, especiales: 
         return None
     # Las columnas que solo se copian al Excel final pueden repetirse (p. ej. «Comienzo de falla»
     # también como Hora); las demás no
-    usadas = [c for canon, c in mapa.items() if canon not in a.EXTRAS_PCZ]
+    usadas = [c for canon, c in mapa.items() if canon not in a.EXTRAS_LG + a.EXTRAS_PCZ]
     if repetidas := sorted({c for c in usadas if usadas.count(c) > 1}):
         st.error("Elegiste la misma columna para dos datos distintos: " + ", ".join(f"«{c}»" for c in repetidas))
         return None

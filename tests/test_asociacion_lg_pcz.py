@@ -223,7 +223,7 @@ MAPA_PCZ = {"Fecha": "Fecha", "Descripción": "Descripcion", "N° Novedad": "Nº
 def test_estructura_fija_de_la_hoja_asociaciones():
     assert list(a.COLUMNAS_SALIDA) == [
         "N°", "ID", "Fecha", "Mes", "N° Novedad", "Sistema", "Subsistema", "Parte", "Elemento",
-        "Nombre correcto", "Km. INPAN", "BuscarV (Km. INPAN)", "Modelo", "Descripción",
+        "Nombre correcto", "Km. INPAN", "BuscarV (Km. INPAN)", "Modelo", "Página", "Descripción",
         "Zona", "VER", "Falla", "Comienzo de falla", "Habilitación"]
     assert a.texto_descripcion(["Falla señal 14", "Normalizada"], ["Se informa falla.", "Se normaliza."]) == (
         "FALLA SEÑAL 14\nNORMALIZADA\n\nSe informa falla.\nSe normaliza.")
@@ -249,6 +249,17 @@ def test_tabla_asociaciones_trae_todas_las_novedades_por_dia(tmp_path):
                                 "Se informa falla en señal 14 de estación Boulogne, concurre mecánico Pérez.\n"
                                 "Se normaliza señal 14 a las 9:10 hs.")
     assert t.iloc[1]["N° Novedad"] == 1003  # una sola novedad: número
+
+
+def test_pagina_del_lg_antes_de_la_descripcion(tmp_path):
+    _, _, lg, pcz = _cargar_ejemplos(tmp_path)
+    t = a.tabla_asociaciones(lg, pcz, _trabajo_ejemplo(pcz))
+    assert list(t.columns).index("Página") == list(t.columns).index("Descripción") - 1
+    ids = [str(x) for x in t["N° Novedad"]]
+    pagina = dict(zip(ids, t["Página"]))
+    assert pagina["1001 | 1002"] == 12 and pagina["1003"] == 12   # una página: número
+    assert pagina["1022"] == "14 | 12"                             # avisos de dos páginas
+    assert pd.isna(pagina["1004"])                                 # sin asociar: vacía
 
 
 def test_columnas_de_pcz_despues_de_la_descripcion(tmp_path):
@@ -305,8 +316,9 @@ def test_exportar_dos_hojas(tmp_path):
     hoja = load_workbook(io.BytesIO(datos))["Asociaciones"]
     assert hoja["A2"].value == 7 and hoja["C2"].number_format == "d/m/yyyy"
     assert hoja["C2"].value.date() == F(2025, 3, 4)
-    assert hoja["N2"].alignment.wrap_text and hoja["N2"].value.startswith("FALLA SEÑAL 14")
-    assert hoja["O4"].value == "Zona 3" and hoja["R4"].number_format == "d/m/yyyy h:mm"  # 1004
+    assert hoja["N2"].value == 12  # página del LG de los avisos de 1001 + 1002
+    assert hoja["O2"].alignment.wrap_text and hoja["O2"].value.startswith("FALLA SEÑAL 14")
+    assert hoja["P4"].value == "Zona 3" and hoja["S4"].number_format == "d/m/yyyy h:mm"  # 1004
 
 
 def test_marcar_pone_cambia_y_saca():
