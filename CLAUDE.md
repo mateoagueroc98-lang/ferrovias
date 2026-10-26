@@ -39,7 +39,8 @@ descargar con nombre elegido. Las claves se normalizan (101 == 101.0, fechas sin
 eligen una o varias novedades del día (se unen) y después los avisos del LG (cada renglón de la
 transcripción) para asociarlas, o se descartan. Lo resuelto queda en gris hasta cambiar de día.
 Cada novedad tiene a la izquierda 🗑️ (descartar solo esa) y ! / !! (marca amarilla / naranja: resalta su
-fila en el Excel final; la naranja gana si una asociación une ambas).
+fila en el Excel final; las novedades unidas —tildadas juntas o asociadas— comparten la marca, y al
+asociar con marcas distintas gana la naranja).
 Candidatos solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple
 sin IA. El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas
 Asociaciones (TODAS las novedades de PCZ ordenadas por día: una fila por asociación y una por novedad sin

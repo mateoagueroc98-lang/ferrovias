@@ -471,6 +471,7 @@ def trabajo_nuevo(huella_archivos: str) -> dict:
 def asociar(trabajo: dict, novedades, avisos_lg) -> None:
     trabajo["asociaciones"].append({"novedades": sorted(set(novedades)), "avisos": list(dict.fromkeys(avisos_lg))})
     trabajo["descartadas"] = [k for k in trabajo["descartadas"] if k not in set(novedades)]
+    unificar_marcas(trabajo, novedades)
 
 
 def descartar(trabajo: dict, novedades) -> None:
@@ -490,13 +491,25 @@ def recuperar(trabajo: dict, novedad: int) -> None:
 COLORES_MARCA = {"amarilla": "FFFF00", "naranja": "FFC000"}
 
 
-def marcar(trabajo: dict, novedad: int, color: str) -> None:
-    """Pone la marca de ese color; si ya la tenía, la saca."""
+def marcar(trabajo: dict, novedad: int, color: str, juntas=()) -> None:
+    """Pone la marca de ese color; si ya la tenía, la saca.
+
+    `juntas` son las novedades unidas con ella (asociadas o tildadas juntas): todas quedan igual.
+    """
     marcas = trabajo.setdefault("marcas", {})
-    if marcas.get(novedad) == color:
-        del marcas[novedad]
-    else:
-        marcas[novedad] = color
+    sacar = marcas.get(novedad) == color
+    for k in {novedad, *juntas}:
+        if sacar:
+            marcas.pop(k, None)
+        else:
+            marcas[k] = color
+
+
+def unificar_marcas(trabajo: dict, novedades) -> None:
+    """Novedades unidas en una asociación: todas toman la marca de la fila (la naranja gana)."""
+    if color := marca(trabajo, novedades):
+        for k in novedades:
+            trabajo["marcas"][k] = color
 
 
 def marca(trabajo: dict, novedades) -> str | None:

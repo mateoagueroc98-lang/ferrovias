@@ -337,7 +337,14 @@ def desechar(k: int):
 
 
 def marcar(k: int, color: str):
-    a.marcar(trabajo, k, color)
+    """Marca la novedad y también las unidas con ella: las de su asociación o las tildadas juntas."""
+    asociacion = a.asociacion_de(trabajo)
+    if k in asociacion:
+        juntas = trabajo["asociaciones"][asociacion[k]]["novedades"]
+    else:
+        tildadas = borrador()["novedades"]
+        juntas = tildadas if k in tildadas else []
+    a.marcar(trabajo, k, color, juntas)
 
 
 def quitar(i: int):

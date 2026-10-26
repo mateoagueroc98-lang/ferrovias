@@ -59,8 +59,10 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
      tilda o destilda (las elegidas se pintan de color).
    - A la izquierda de cada novedad de PCZ hay 3 botones chicos: **🗑️** la descarta al instante (solo
      esa, sin tocar lo tildado), **!** (amarillo) y **!!** (naranja) la marcan para que su fila salga
-     **resaltada en ese color en el Excel final** (hoja «Asociaciones», esté asociada o no). Tocar otra vez el mismo botón saca la marca. Si una asociación une novedades con
-     marcas distintas, gana la naranja. Las novedades ya resueltas (en gris) muestran solo ! y !!.
+     **resaltada en ese color en el Excel final** (hoja «Asociaciones», esté asociada o no). Tocar otra vez el mismo botón saca la marca.
+     Las novedades unidas (tildadas juntas o ya asociadas entre sí) llevan siempre la misma marca:
+     marcar, cambiar el color o sacar la marca de una lo hace en todas. Si al asociar tenían marcas
+     distintas, gana la naranja. Las novedades ya resueltas (en gris) muestran solo ! y !!.
    - Los botones de acción (Elegir avisos del LG / Asociar, Descartar, Todas, Volver) quedan **fijos abajo
      de la pantalla** mientras hacés scroll.
    - Atajos: **1–9** tildar novedad (paso ①) o aviso (paso ②) · **Enter** pasar al paso ② / asociar ·

@@ -281,6 +281,24 @@ def test_marcar_pone_cambia_y_saca():
     assert s["marcas"] == {}
 
 
+def test_marcar_una_marca_tambien_las_unidas():
+    s = a.trabajo_nuevo("h")
+    a.marcar(s, 1, "amarilla", juntas=[1, 2, 3])
+    assert s["marcas"] == {1: "amarilla", 2: "amarilla", 3: "amarilla"}
+    a.marcar(s, 2, "naranja", juntas=[1, 2, 3])   # cambiar el color de una cambia todas
+    assert s["marcas"] == {1: "naranja", 2: "naranja", 3: "naranja"}
+    a.marcar(s, 3, "naranja", juntas=[1, 2, 3])   # sacarla a una la saca de todas
+    assert s["marcas"] == {}
+
+
+def test_asociar_unifica_las_marcas():
+    s = a.trabajo_nuevo("h")
+    a.marcar(s, 1, "amarilla")
+    a.marcar(s, 2, "naranja")
+    a.asociar(s, [1, 2, 3], ["0:0"])
+    assert s["marcas"] == {1: "naranja", 2: "naranja", 3: "naranja"}
+
+
 def test_marca_de_una_fila_naranja_pesa_mas():
     s = a.trabajo_nuevo("h")
     a.marcar(s, 1, "amarilla")
