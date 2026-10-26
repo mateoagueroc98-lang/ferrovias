@@ -28,7 +28,7 @@ tests/                  # tests con pytest + tests/ejemplos/ (Excels INVENTADOS,
 | Módulo (menú) | Pantalla | Lógica | Estado |
 |---|---|---|---|
 | Cruce de Excels | `modulos/cruce.py` | `src/cruce.py` | Terminado, **oculto del menú** (comentado en `app.py`) |
-| Transcripciones del Libro de Guardia | `modulos/relleno_pdf.py` | — | En desarrollo |
+| Transcripciones del LG | `modulos/transcripcion_lg.py` | `src/transcripcion_lg.py` | MVP |
 | Asociación LG ↔ PCZ | `modulos/asociacion_lg_pcz.py` | `src/asociacion_lg_pcz.py` | MVP |
 | Concatenación | `modulos/concatenacion.py` | `src/concatenacion.py` | MVP |
 
@@ -49,6 +49,16 @@ Asociaciones (TODAS las novedades de PCZ ordenadas por día: una fila por asocia
 asociar; estructura fija de 20 columnas `COLUMNAS_SALIDA`, con «Página» del LG antes de «Descripción» y las últimas 5
 copiadas de PCZ: `EXTRAS_PCZ`, N° consecutivo desde el número que se elige,
 Fecha d/m/yyyy, Descripción = PCZ en MAYÚSCULAS + renglón vacío + LG) y LG sin asociar (columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
+
+**Transcripciones del LG**: PDF escaneado del Libro de Guardia → Excel con la API de Claude (visión).
+Páginas → JPEG de 2576 px (`pypdfium2`), en tandas FIJAS de 3, de a una y en orden (cada tanda recibe
+última fecha + último párrafo de la anterior). System = instrucciones + referencia (con caché). JSON
+validado; si viene mal, 1 reintento y si no, tanda con error. Unión: `continuacion_del_anterior` se pega a
+la última fila (folio «X-Y»); `cortado_al_final` sin continuación → fila para revisar. Revisión fila ↔
+página, correcciones a mano, reintentar tanda (o desde ahí al final), respuestas crudas y costo. Excel de 1
+hoja: Folio (texto) | Fecha (DD/MM/AAAA) | Hora (HH:MM) | Transcripción (ajustar texto). Los 2 documentos
+y el modelo se editan en ⚙️ Configuración y se guardan en `config/transcripcion_lg/` (SÍ va a git; con
+`historial/` y `originales/`); la app nunca los modifica sola. PDF inventado en `tests/ejemplos/LG_ejemplo.pdf`.
 
 **Concatenación**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por
 número de novedad (Nro, Fecha, Hora inicio, Hora fin, Detalle). Hora fin = hora del último renglón cuyo
@@ -72,7 +82,7 @@ CSV inventado en `tests/ejemplos/LibroNovedades_ejemplo.csv`.
   `#E31B22` a `#9E1219` (menú y botones principales), fondo andén `#F4F3F2`, texto grafito `#1C1A19`;
   estados con colores de señal: verde `#2F7D4A`, amarillo `#C98A00`/`#FFE27A` (resaltado), rojo error
   `#B3261E`. Para cambios visuales usar la skill `frontend-design`.
-- Nunca subir datos ni secretos: `.xlsx`, `.csv` y `.env` están en `.gitignore`. La clave de
+- Nunca subir datos ni secretos: `.xlsx`, `.csv`, `.pdf` y `.env` están en `.gitignore`. La clave de
   Anthropic va en `.env` (`ANTHROPIC_API_KEY`), ver `.env.example`.
 - Dependencias nuevas → `requirements.txt` y avisar al usuario que corra
   `pip install -r requirements.txt`.

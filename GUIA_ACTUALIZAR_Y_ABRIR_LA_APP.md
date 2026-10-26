@@ -173,6 +173,23 @@ Para volver a la versión estable, usar de nuevo el bloque de todos los días (e
 
 Igual que en la Mac: recargar la página o volver a abrir la app (no hay nada guardado que borrar).
 
+### Llevar la configuración de «Transcripciones del LG» a la otra compu
+
+Lo que se guarda en ⚙️ Configuración (instrucciones, referencia, modelo) queda en la carpeta
+`config\transcripcion_lg` del proyecto. Para que llegue a la Mac, subirlo a GitHub (con la app cerrada,
+en la ventana negra):
+
+```
+cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
+git add config/transcripcion_lg
+git commit -m "Transcripciones del LG: actualizo la configuración"
+git push
+```
+
+En la Mac llega con el `git pull` de todos los días (y al revés: en la Mac los mismos tres comandos
+`git add` / `git commit` / `git push` desde `~/ferrovias`). Editar la configuración **en un solo lugar a
+la vez**: si se cambia el mismo documento en las dos compus sin subirlo, `git pull` va a dar error.
+
 ### Instalación (solo la primera vez en esta compu)
 
 > Ya está hecha en la compu de Mateo y en la del jefe. Queda anotada por si hay que rehacerla

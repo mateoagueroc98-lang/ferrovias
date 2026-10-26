@@ -3,9 +3,12 @@
 *.xls
 *.xlsm
 *.csv
-# Excels INVENTADOS de prueba (sí se suben)
+# PDFs del Libro de Guardia (internos)
+*.pdf
+# Excels y PDFs INVENTADOS de prueba (sí se suben)
 !tests/ejemplos/*.xlsx
 !tests/ejemplos/*.csv
+!tests/ejemplos/*.pdf
 
 # Secretos
 .env
