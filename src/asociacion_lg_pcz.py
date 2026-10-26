@@ -27,8 +27,14 @@ COLUMNAS_PCZ = {
     # "N° Novedad", "Nº Novedad", "N Novedad", "Nro. Novedad", "Número de novedad"...
     "N° Novedad": lambda c: re.fullmatch(r"(n|no|nro|num|numero)?(de)?novedad", c) is not None,
     "Hora": lambda c: c.startswith("hora"),
+    # Columnas que solo se copian al Excel final (después de «Descripción»)
+    "Zona": lambda c: c == "zona",
+    "VER": lambda c: c == "ver",
+    "Falla": lambda c: c == "falla",
+    "Comienzo de falla": lambda c: c.startswith("comienzo"),
+    "Habilitación": lambda c: c.startswith("habilitacion"),
 }
-
+EXTRAS_PCZ = ("Zona", "VER", "Falla", "Comienzo de falla", "Habilitación")
 
 
 def sin_tildes(texto: str) -> str:
@@ -317,11 +323,12 @@ def preparar_lg(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
 
 
 # Columnas que pueden no estar en el archivo de PCZ (sin N° Novedad se usa el número de fila del Excel)
-OPCIONALES_PCZ = ("N° Novedad", "Hora")
+OPCIONALES_PCZ = ("N° Novedad", "Hora") + EXTRAS_PCZ
 
 
 def preparar_pcz(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
-    """Tabla de trabajo de PCZ: id, descripción, fecha y hora normalizadas.
+    """Tabla de trabajo de PCZ: id, descripción, fecha y hora normalizadas, más las columnas de
+    EXTRAS_PCZ tal como vienen (vacías si el archivo no las tiene).
 
     Sin columna "N° Novedad", el id de cada novedad es su número de fila en el Excel.
     """
@@ -337,6 +344,9 @@ def preparar_pcz(df: pd.DataFrame, mapa: dict) -> pd.DataFrame:
         "fecha": df[mapa["Fecha"]].map(parsear_fecha),
         "hora": pd.Series([parsear_hora(v) for v in hora], index=df.index, dtype=object),
     })
+    for nombre in EXTRAS_PCZ:
+        t[nombre] = (df[mapa[nombre]].astype(object) if nombre in mapa
+                     else pd.Series([None] * len(df), index=df.index, dtype=object))
     return t.reset_index(drop=True)
 
 
@@ -568,6 +578,8 @@ COLUMNAS_SALIDA = {
     "BuscarV (Km. INPAN)": None,
     "Modelo": None,
     "Descripción": "Texto de PCZ en MAYÚSCULAS, un renglón vacío y abajo el texto del LG tal como viene.",
+    # De PCZ, tal como vienen (si se unieron varias novedades: valores distintos con « | »)
+    **{nombre: f"Columna «{nombre}» de PCZ." for nombre in EXTRAS_PCZ},
 }
 FORMATO_FECHA = "d/m/yyyy"
 
@@ -634,6 +646,10 @@ def tabla_asociaciones(lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, numer
         fila["N° Novedad"] = (int(ids[0]) if ids[0].isdigit() else ids[0]) if len(ids) == 1 else " | ".join(ids)
         fila["Descripción"] = texto_descripcion([pcz.loc[k, "descripcion"] for k in novs],
                                                 [lg.loc[i, "avisos"][j] for i, j in claves])
+        for nombre in EXTRAS_PCZ:
+            valores = [v for v in (pcz.loc[k, nombre] for k in novs) if _texto_celda(v)]
+            fila[nombre] = (_sin_hora(valores[0]) if len({_texto_celda(v) for v in valores}) == 1
+                            else _juntar(valores) or None)
         filas.append(fila)
     return pd.DataFrame(filas, columns=list(COLUMNAS_SALIDA))
 
@@ -694,6 +710,8 @@ def exportar(lg_original: pd.DataFrame, lg: pd.DataFrame, pcz: pd.DataFrame, tra
                     if isinstance(celda.value, dt.date) and (
                             not isinstance(celda.value, dt.datetime) or celda.value.time() == dt.time(0)):
                         celda.number_format = FORMATO_FECHA if nombre == "Asociaciones" else "DD/MM/YYYY"
+                    elif isinstance(celda.value, dt.datetime) and nombre == "Asociaciones":
+                        celda.number_format = FORMATO_FECHA + " h:mm"  # p. ej. Comienzo de falla
                     elif isinstance(celda.value, str) and "\n" in celda.value:
                         celda.alignment = Alignment(wrap_text=True, vertical="top")
             for n, color in enumerate(colores.get(nombre, []), start=2):

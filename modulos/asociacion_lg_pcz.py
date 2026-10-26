@@ -43,6 +43,7 @@ if msg := ss.pop(P + "msg", None):
 # ===================================================================== 1. Carga
 SIN_HORA = "— no tiene hora —"
 FILA_EXCEL = "— usar el número de fila del Excel —"
+NO_ESTA = "— no está en el archivo (queda vacía) —"
 ARCHIVOS = [
     # clave, título, columnas, ayuda por columna, opción especial de las opcionales
     ("lg", "Libro de Guardia (LG)", a.COLUMNAS_LG, {
@@ -58,7 +59,9 @@ ARCHIVOS = [
                       "novedades, sus N° se juntan en la misma celda separados por « | ».",
         "Hora": "Opcional. Suma puntos a las novedades con hora cercana a la de LG "
                 "(además de las horas escritas en la descripción).",
-    }, {"N° Novedad": FILA_EXCEL, "Hora": SIN_HORA}),
+        **{nombre: f"Opcional. Se copia tal cual a la columna «{nombre}» del Excel final."
+           for nombre in a.EXTRAS_PCZ},
+    }, {"N° Novedad": FILA_EXCEL, "Hora": SIN_HORA, **{nombre: NO_ESTA for nombre in a.EXTRAS_PCZ}}),
 ]
 
 
@@ -78,16 +81,21 @@ def elegir_columnas(clave: str, df: pd.DataFrame, esperadas: dict, ayudas: dict,
         columnas = list(df.columns)
         mapa = {"_firma": firma}
         cols = st.columns(2)
-        for k, canon in enumerate(ayudas):
+        k = 0
+        for canon in ayudas:
+            if canon == a.EXTRAS_PCZ[0]:  # las que solo se copian al Excel final, aparte
+                st.caption("Columnas que se copian al Excel final (después de «Descripción»):")
+                cols, k = st.columns(2), 0
             opciones = ([especiales[canon]] if canon in especiales else []) + columnas
             actual = guardado.get(canon)
             elegida = cols[k % 2].selectbox(
-                canon + (" (opcional)" if canon == "Hora" else ""), opciones,
+                canon + (" (opcional)" if canon == "Hora" or canon in a.EXTRAS_PCZ else ""), opciones,
                 index=opciones.index(actual) if actual in opciones else None,
                 placeholder="Elegí la columna", help=ayudas[canon], key=f"{P}col_{clave}_{canon}_{firma}",
             )
             if elegida is not None:
                 mapa[canon] = elegida
+            k += 1
         ss[P + "mapa_" + clave] = guardado = mapa
     return {k: v for k, v in guardado.items() if k != "_firma" and v not in especiales.values()}
 
@@ -224,10 +232,16 @@ if paso == PASOS[2]:
     ss[P + "numero_inicial"] = numero_inicial  # se recuerda si vas y volvés de este paso
     tabla = a.tabla_asociaciones(lg, pcz, trabajo, int(numero_inicial))
     st.caption(f"Vista previa ({len(tabla)} fila(s)):")
-    vista = tabla.head(20).copy()
-    vista["Fecha"] = vista["Fecha"].map(lambda f: f"{f.day}/{f.month}/{f.year}" if hasattr(f, "day") else f)
-    st.dataframe(vista.map(lambda v: "" if v is None or (not isinstance(v, str) and pd.isna(v)) else str(v)),
-                 hide_index=True, use_container_width=True)
+    def como_en_excel(v) -> str:
+        """Valor como se va a ver en el Excel: fechas d/m/aaaa (y h:mm si tienen hora)."""
+        if v is None or (not isinstance(v, str) and pd.isna(v)):
+            return ""
+        if hasattr(v, "day"):
+            fecha = f"{v.day}/{v.month}/{v.year}"
+            return fecha + (f" {v.hour}:{v.minute:02d}" if getattr(v, "hour", 0) or getattr(v, "minute", 0) else "")
+        return str(v)
+
+    st.dataframe(tabla.head(20).map(como_en_excel), hide_index=True, use_container_width=True)
 
     nombre = st.text_input("Nombre del archivo a descargar", value="asociacion_LG_PCZ")
     # Sacar caracteres que Windows no acepta en nombres de archivo

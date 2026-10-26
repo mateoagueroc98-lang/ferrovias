@@ -57,11 +57,11 @@ def test_horas_en_texto_no_confunde_km():
 def test_mapear_columnas_tolerante():
     df = pd.DataFrame(columns=["  DESCRIPCION ", "fecha", "Nº Novedad", "Hora del evento"])
     mapa, faltan = a.mapear_columnas(df, a.COLUMNAS_PCZ)
-    assert faltan == [] and mapa["Hora"] == "Hora del evento"
+    assert faltan == list(a.EXTRAS_PCZ) and mapa["Hora"] == "Hora del evento"
     assert mapa["N° Novedad"] == "Nº Novedad"
     for nombre in ["N° Novedad", "N Novedad", "Nro. Novedad", "nº novedad"]:
         _, faltan = a.mapear_columnas(pd.DataFrame(columns=["Descripción", "Fecha", nombre]), a.COLUMNAS_PCZ)
-        assert faltan == ["Hora"], nombre  # la hora es opcional
+        assert faltan == ["Hora", *a.EXTRAS_PCZ], nombre  # hora y columnas extra son opcionales
 
 
 def test_mapear_columnas_avisa_faltantes():
@@ -205,7 +205,8 @@ MAPA_PCZ = {"Fecha": "Fecha", "Descripción": "Descripcion", "N° Novedad": "Nº
 def test_estructura_fija_de_la_hoja_asociaciones():
     assert list(a.COLUMNAS_SALIDA) == [
         "N°", "ID", "Fecha", "Mes", "N° Novedad", "Sistema", "Subsistema", "Parte", "Elemento",
-        "Nombre correcto", "Km. INPAN", "BuscarV (Km. INPAN)", "Modelo", "Descripción"]
+        "Nombre correcto", "Km. INPAN", "BuscarV (Km. INPAN)", "Modelo", "Descripción",
+        "Zona", "VER", "Falla", "Comienzo de falla", "Habilitación"]
     assert a.texto_descripcion(["Falla señal 14", "Normalizada"], ["Se informa falla.", "Se normaliza."]) == (
         "FALLA SEÑAL 14\nNORMALIZADA\n\nSe informa falla.\nSe normaliza.")
     assert a.texto_descripcion(["Falla señal 14"], []) == "FALLA SEÑAL 14"  # sin asociar: solo PCZ
@@ -230,6 +231,24 @@ def test_tabla_asociaciones_trae_todas_las_novedades_por_dia(tmp_path):
                                 "Se informa falla en señal 14 de estación Boulogne, concurre mecánico Pérez.\n"
                                 "Se normaliza señal 14 a las 9:10 hs.")
     assert t.iloc[1]["N° Novedad"] == 1003  # una sola novedad: número
+
+
+def test_columnas_de_pcz_despues_de_la_descripcion(tmp_path):
+    _, _, lg, pcz = _cargar_ejemplos(tmp_path)
+    t = a.tabla_asociaciones(lg, pcz, _trabajo_ejemplo(pcz))
+    unidas, sola = t.iloc[0], t.iloc[2]  # 1001 + 1002 unidas; 1004 sola (descartada)
+    assert unidas["Zona"] == "Zona 3 | Zona 1" and unidas["Falla"] == "Barreras | Energía"
+    assert sola["Zona"] == "Zona 3" and sola["VER"] == "No" and sola["Falla"] == "Señalamiento"
+    assert sola["Comienzo de falla"] == pd.Timestamp(2025, 3, 4, 14, 50)  # fecha y hora, sin tocar
+    assert sola["Habilitación"] == pd.Timestamp(2025, 3, 4, 15, 35)
+
+
+def test_columnas_de_pcz_vacias_si_el_archivo_no_las_tiene():
+    df = pd.DataFrame({"Fecha": ["04/03/2025"], "Descripcion": ["A"]})
+    pcz = a.preparar_pcz(df, {"Fecha": "Fecha", "Descripción": "Descripcion"})
+    lg = a.preparar_lg(pd.DataFrame({"Fecha": ["04/03/2025"], "T": ["X"]}), {"Fecha": "Fecha", "Transcripción": "T"})
+    t = a.tabla_asociaciones(lg, pcz, a.trabajo_nuevo("h"))
+    assert t[list(a.EXTRAS_PCZ)].isna().all().all()
 
 
 def test_tabla_asociaciones_ordena_por_dia_aunque_el_pcz_venga_desordenado():
@@ -269,6 +288,7 @@ def test_exportar_dos_hojas(tmp_path):
     assert hoja["A2"].value == 7 and hoja["C2"].number_format == "d/m/yyyy"
     assert hoja["C2"].value.date() == F(2025, 3, 4)
     assert hoja["N2"].alignment.wrap_text and hoja["N2"].value.startswith("FALLA SEÑAL 14")
+    assert hoja["O4"].value == "Zona 3" and hoja["R4"].number_format == "d/m/yyyy h:mm"  # 1004
 
 
 def test_marcar_pone_cambia_y_saca():

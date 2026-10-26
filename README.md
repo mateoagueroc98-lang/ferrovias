@@ -27,7 +27,8 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
 
 **Archivos que necesita** (las columnas pueden llamarse como sea: al cargar elegís cuál es cada dato):
 - **LG**: Fecha y Transcripción (cada fila es un párrafo; cada renglón es un aviso) y, si hay, Hora.
-- **PCZ**: Fecha, Descripción, N° Novedad y, si hay, Hora.
+- **PCZ**: Fecha, Descripción, N° Novedad y, si hay, Hora. Además, opcionales que solo se copian al Excel
+  final: Zona, VER, Falla, Comienzo de falla y Habilitación.
 - **N° Novedad** es lo que identifica cada novedad. En la hoja `Asociaciones`, si una asociación tiene
   varias novedades, sus N° se juntan en la misma celda separados por ` | `. Si el archivo no tiene esa
   columna, se puede usar el número de fila del Excel.
@@ -76,7 +77,8 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
      con sus avisos del LG) y una fila por cada novedad sin asociar (descartada o sin revisar), con una
      **estructura fija** igual a la tabla madre, para copiar las filas y pegarlas a continuación:
      N° · ID · Fecha · Mes · N° Novedad · Sistema · Subsistema · Parte · Elemento · Nombre correcto ·
-     Km. INPAN · BuscarV (Km. INPAN) · Modelo · Descripción.
+     Km. INPAN · BuscarV (Km. INPAN) · Modelo · Descripción · Zona · VER · Falla · Comienzo de falla ·
+     Habilitación.
      - **N°**: consecutivo; el de la primera fila se escribe en pantalla y sube de a uno hacia abajo.
      - **Fecha**: la de la novedad de PCZ, con formato 19/9/2026.
      - **N° Novedad**: el de PCZ (si se unieron varias, separados por ` | `).
@@ -84,6 +86,8 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
        del LG tal como viene (cada uno en su renglón). Si la novedad no tiene avisos, solo el texto de PCZ.
      - ID, Mes, Sistema, Subsistema, Parte, Elemento, Nombre correcto, Km. INPAN, BuscarV y Modelo
        van **vacías**, para completarlas después.
+     - **Zona, VER, Falla, Comienzo de falla y Habilitación**: copiadas de PCZ tal como vienen (si se
+       unieron varias novedades, sus valores distintos separados por ` | `; vacías si el PCZ no las tiene).
    - **LG sin asociar**: los avisos que no quedaron en ninguna asociación, con las columnas del Excel
      de LG.
 
