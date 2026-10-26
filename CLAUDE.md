@@ -1,12 +1,14 @@
 # Ferrovías – Automatización de Excels
 
 App local en **Python + Streamlit** para automatizar trabajo con Excels. Se abre en
-`http://localhost:8501` desde dos computadoras sincronizadas por GitHub (comandos exactos en
+`http://localhost:8501` desde la Mac de casa y las compus del trabajo, sincronizadas por GitHub (comandos exactos en
 `GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md`):
 - **Casa – Mac**: `~/ferrovias`, con `.venv` (`source .venv/bin/activate` + `streamlit run app.py`).
 - **Trabajo – Windows**: `Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias`
   (unidad de red), con Git. **Sin `.venv`**: librerías con `py -3.13 -m pip install --user`, la app
   con `py -3.13 -m streamlit run app.py --server.headless true`. No pasarle comandos con `.venv`.
+  Esa carpeta la usan **dos compus** (la de Mateo y la del jefe): un `git checkout` en una cambia la
+  carpeta para las dos. Acceso directo del escritorio: `abrir_app_windows.bat` (siempre vuelve a `main`).
 
 Es usuario no técnico: explicale en español, simple y con pasos concretos.
 
@@ -25,7 +27,7 @@ tests/                  # tests con pytest + tests/ejemplos/ (Excels INVENTADOS,
 
 | Módulo (menú) | Pantalla | Lógica | Estado |
 |---|---|---|---|
-| Cruce de Excels | `modulos/cruce.py` | `src/cruce.py` | Terminado |
+| Cruce de Excels | `modulos/cruce.py` | `src/cruce.py` | Terminado, **oculto del menú** (comentado en `app.py`) |
 | Transcripciones del Libro de Guardia | `modulos/relleno_pdf.py` | — | En desarrollo |
 | Asociación LG ↔ PCZ | `modulos/asociacion_lg_pcz.py` | `src/asociacion_lg_pcz.py` | MVP |
 | Concatenación | `modulos/concatenacion.py` | `src/concatenacion.py` | MVP |
