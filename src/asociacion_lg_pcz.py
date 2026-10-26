@@ -14,8 +14,9 @@ import pandas as pd
 from openpyxl.styles import Alignment, PatternFill
 
 # ------------------------------------------------------------------ columnas
-# Nombre canónico -> función que reconoce el encabezado ya normalizado
-# (sin tildes, minúsculas, solo letras y números).
+# Nombre canónico -> función que reconoce el encabezado ya normalizado (sin tildes, minúsculas,
+# solo letras y números). No es búsqueda aproximada: son reglas fijas. Si hay varias reglas (tupla),
+# se prueban en orden: la segunda solo se usa si ninguna columna cumple la primera.
 COLUMNAS_LG = {
     "Fecha": lambda c: c == "fecha",
     "Transcripción": lambda c: c == "transcripcion",
@@ -26,7 +27,8 @@ COLUMNAS_PCZ = {
     "Descripción": lambda c: c == "descripcion",
     # "N° Novedad", "Nº Novedad", "N Novedad", "Nro. Novedad", "Número de novedad"...
     "N° Novedad": lambda c: re.fullmatch(r"(n|no|nro|num|numero)?(de)?novedad", c) is not None,
-    "Hora": lambda c: c.startswith("hora"),
+    # Sin columna «Hora…», la hora se toma de «Comienzo de falla» (fecha y hora)
+    "Hora": (lambda c: c.startswith("hora"), lambda c: c.startswith("comienzo")),
     # Columnas que solo se copian al Excel final (después de «Descripción»)
     "Zona": lambda c: c == "zona",
     "VER": lambda c: c == "ver",
@@ -53,8 +55,9 @@ def mapear_columnas(df: pd.DataFrame, esperadas: dict) -> tuple[dict, list[str]]
     Devuelve ({nombre canónico: nombre real en el archivo}, [faltantes]).
     """
     mapa, faltan = {}, []
-    for canon, reconoce in esperadas.items():
-        real = next((c for c in df.columns if reconoce(_clave_encabezado(c))), None)
+    for canon, reglas in esperadas.items():
+        reglas = reglas if isinstance(reglas, tuple) else (reglas,)
+        real = next((c for regla in reglas for c in df.columns if regla(_clave_encabezado(c))), None)
         if real is None:
             faltan.append(canon)
         else:
@@ -150,6 +153,8 @@ def parsear_hora(valor) -> int | None:
             return int(valor) * 60
         return None
     texto = str(valor).strip()
+    # Fecha y hora en texto ("04/03/2025 14:50", "2025-03-04 14:50:00"): se usa solo la hora
+    texto = re.sub(r"^\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4}[\sT]+", "", texto)
     m = re.fullmatch(r"([01]?\d|2[0-3])(?:[:.]([0-5]\d))?(?::\d\d)?\s*(?:hs?)?", texto, re.IGNORECASE)
     if m:
         return int(m.group(1)) * 60 + int(m.group(2) or 0)

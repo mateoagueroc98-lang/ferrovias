@@ -58,7 +58,8 @@ ARCHIVOS = [
         "N° Novedad": "Identifica cada novedad. En la hoja «Asociaciones», si una asociación tiene varias "
                       "novedades, sus N° se juntan en la misma celda separados por « | ».",
         "Hora": "Opcional. Suma puntos a las novedades con hora cercana a la de LG "
-                "(además de las horas escritas en la descripción).",
+                "(además de las horas escritas en la descripción). Si el PCZ no tiene columna de hora, "
+                "se usa «Comienzo de falla» (de su fecha y hora se toma solo la hora).",
         **{nombre: f"Opcional. Se copia tal cual a la columna «{nombre}» del Excel final."
            for nombre in a.EXTRAS_PCZ},
     }, {"N° Novedad": FILA_EXCEL, "Hora": SIN_HORA, **{nombre: NO_ESTA for nombre in a.EXTRAS_PCZ}}),
@@ -130,7 +131,10 @@ def archivo(clave: str, titulo: str, esperadas: dict, ayudas: dict, especiales: 
         if mostrar:
             st.warning("Falta elegir: " + ", ".join(f"**{c}**" for c in faltan) + ".")
         return None
-    if repetidas := sorted({c for c in mapa.values() if list(mapa.values()).count(c) > 1}):
+    # Las columnas que solo se copian al Excel final pueden repetirse (p. ej. «Comienzo de falla»
+    # también como Hora); las demás no
+    usadas = [c for canon, c in mapa.items() if canon not in a.EXTRAS_PCZ]
+    if repetidas := sorted({c for c in usadas if usadas.count(c) > 1}):
         st.error("Elegiste la misma columna para dos datos distintos: " + ", ".join(f"«{c}»" for c in repetidas))
         return None
     if mostrar:

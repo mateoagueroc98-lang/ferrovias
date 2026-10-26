@@ -64,6 +64,24 @@ def test_mapear_columnas_tolerante():
         assert faltan == ["Hora", *a.EXTRAS_PCZ], nombre  # hora y columnas extra son opcionales
 
 
+def test_hora_de_pcz_sale_de_comienzo_de_falla_si_no_hay_columna_hora():
+    sin_hora = pd.DataFrame(columns=["Descripción", "Fecha", "Comienzo de falla", "Habilitación"])
+    mapa, _ = a.mapear_columnas(sin_hora, a.COLUMNAS_PCZ)
+    assert mapa["Hora"] == "Comienzo de falla" and mapa["Comienzo de falla"] == "Comienzo de falla"
+    con_hora = pd.DataFrame(columns=["Comienzo de falla", "Descripción", "Fecha", "Hora"])
+    assert a.mapear_columnas(con_hora, a.COLUMNAS_PCZ)[0]["Hora"] == "Hora"  # «Hora» tiene prioridad
+
+
+def test_preparar_pcz_hora_desde_fecha_y_hora():
+    df = pd.DataFrame({"Fecha": ["04/03/2025"] * 3, "Descripcion": ["A", "B", "C"],
+                       "Comienzo de falla": [pd.Timestamp(2025, 3, 4, 14, 50), "04/03/2025 9:05", None]})
+    mapa = {"Fecha": "Fecha", "Descripción": "Descripcion", "Hora": "Comienzo de falla",
+            "Comienzo de falla": "Comienzo de falla"}
+    pcz = a.preparar_pcz(df, mapa)
+    assert list(pcz["hora"]) == [14 * 60 + 50, 9 * 60 + 5, None]
+    assert pcz.loc[0, "Comienzo de falla"] == pd.Timestamp(2025, 3, 4, 14, 50)  # se copia entera
+
+
 def test_mapear_columnas_avisa_faltantes():
     _, faltan = a.mapear_columnas(pd.DataFrame(columns=["Pagina", "Fecha"]), a.COLUMNAS_LG)
     assert faltan == ["Transcripción", "Hora"]

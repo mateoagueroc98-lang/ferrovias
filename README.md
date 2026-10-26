@@ -34,6 +34,10 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
   columna, se puede usar el número de fila del Excel.
 - **Hora** (LG y PCZ, opcional): suma puntos a los avisos con hora cercana a la de la novedad, además
   de las horas escritas dentro de los textos.
+- **Cómo se reconocen las columnas**: no es búsqueda aproximada, son reglas fijas sobre el encabezado
+  (sin tildes, mayúsculas ni signos). La Hora de PCZ es la columna que empieza con «Hora»; si no hay
+  ninguna, se usa «Comienzo de falla» (de su fecha y hora se toma solo la hora). Una misma columna puede
+  usarse como Hora y además copiarse al Excel final. Siempre se puede cambiar a mano en el desplegable.
 
 **Pasos**
 1. **Carga**: subí los dos Excel y, debajo de cada uno, elegí qué columna es cada dato (si se llaman
