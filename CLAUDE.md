@@ -9,6 +9,9 @@ App local en **Python + Streamlit** para automatizar trabajo con Excels. Se abre
   con `py -3.13 -m streamlit run app.py --server.headless true`. No pasarle comandos con `.venv`.
   Esa carpeta la usan **dos compus** (la de Mateo y la del jefe): un `git checkout` en una cambia la
   carpeta para las dos. Acceso directo del escritorio: `abrir_app_windows.bat` (siempre vuelve a `main`).
+  Para crear o cambiar accesos directos (`.bat`) seguir las reglas de la sección «Accesos directos» de
+  la guía: los de ramas van **afuera** de `ferrovias`, `%~dp0` en vez de la ruta, sin tildes, `>NUL` (nunca
+  `/dev/null`), fin de línea CRLF.
 
 Es usuario no técnico: explicale en español, simple y con pasos concretos.
 

@@ -127,7 +127,7 @@ el bloque entero:
 cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
 git checkout main
 git pull
-start "" cmd /c "timeout /t 10 >nul & start chrome http://localhost:8501"
+start "" cmd /c "timeout /t 20 >NUL & start chrome http://localhost:8501"
 py -3.13 -m streamlit run app.py --server.headless true
 ```
 
@@ -136,7 +136,7 @@ py -3.13 -m streamlit run app.py --server.headless true
 | `cd /d "Y:\...\ferrovias"` | Entra a la carpeta del proyecto, desde donde se esté. |
 | `git checkout main` | Se asegura de estar en `main`, la versión estable. |
 | `git pull` | Trae de GitHub los últimos cambios. |
-| `start "" cmd /c "timeout ... chrome ..."` | Espera 10 segundos a que arranque la app y la abre en Chrome. |
+| `start "" cmd /c "timeout ... chrome ..."` | Espera 20 segundos a que arranque la app y la abre en Chrome. |
 | `py -3.13 -m streamlit run ...` | Abre la app (no se usa `.venv`: las librerías están instaladas en el usuario). |
 
 - Si Chrome muestra «No se puede acceder a este sitio», esperar unos segundos y apretar **F5**:
@@ -162,7 +162,7 @@ cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
 git fetch
 git checkout NOMBRE-DE-LA-RAMA
 git pull
-start "" cmd /c "timeout /t 10 >nul & start chrome http://localhost:8501"
+start "" cmd /c "timeout /t 20 >NUL & start chrome http://localhost:8501"
 py -3.13 -m streamlit run app.py --server.headless true
 ```
 
@@ -172,6 +172,52 @@ Para volver a la versión estable, usar de nuevo el bloque de todos los días (e
 ### Empezar de cero en el módulo Asociación LG ↔ PCZ
 
 Igual que en la Mac: recargar la página o volver a abrir la app (no hay nada guardado que borrar).
+
+### Accesos directos (archivos `.bat`)
+
+Hay dos tipos. Reglas para crearlos (también para las sesiones de Claude):
+
+| | Versión estable (`main`) | Probar una rama |
+|---|---|---|
+| Archivo | `abrir_app_windows.bat`, **dentro** de `ferrovias` (está en GitHub) | `probar_rama_<nombre>.bat`, **afuera**, en la carpeta `Claude` (no está en GitHub) |
+| Carpeta | `cd /d "%~dp0"` | `cd /d "%~dp0ferrovias"` |
+| Acceso directo | «App Ferrovías» | «PRUEBA <nombre>» |
+
+1. **Los de ramas van afuera de `ferrovias`.** Si estuvieran adentro, el `git checkout` los borra o
+   los cambia mientras se ejecutan y el acceso directo deja de andar.
+2. **Nunca escribir la ruta de `Y:` adentro del `.bat`**: tiene tildes y espacios. Usar `%~dp0`
+   (la carpeta donde está el `.bat`).
+3. **Solo letras sin tildes** en el contenido (`Asociacion`, no `Asociación`).
+4. **Comandos de Windows, no de Mac/Linux**: para descartar texto se usa `>NUL`, nunca `>/dev/null`
+   (si no, la espera no se hace y Chrome se abre antes que la app).
+5. **Siempre el mismo orden**: carpeta → `git fetch` (solo en ramas) → `git checkout` → `git pull` →
+   `pip install` (solo en ramas, por si agregaron librerías) → abrir Chrome a los 20 segundos → app →
+   `pause` (para que la ventana no se cierre si hay un error).
+6. **Guardarlos desde el Bloc de notas** con el nombre **entre comillas** (`"probar_rama_x.bat"`);
+   si no, Windows agrega `.txt`. El ícono correcto es una ventanita con engranaje.
+7. **Uno abierto a la vez**: antes de abrir otro, cerrar la ventana negra del anterior (los dos usan
+   `localhost:8501`).
+8. **La carpeta es compartida con la compu del jefe**: al terminar de probar una rama, abrir una vez
+   «App Ferrovías» para dejar la carpeta en `main`.
+
+Modelo para probar una rama (cambiar `NOMBRE-DE-LA-RAMA` y el título):
+
+```
+@echo off
+rem Prueba una rama (no es la version estable). Va en la carpeta Claude, al lado de ferrovias.
+title Ferrovias - PRUEBA NOMBRE-DE-LA-RAMA
+cd /d "%~dp0ferrovias"
+git fetch
+git checkout NOMBRE-DE-LA-RAMA
+git pull
+py -3.13 -m pip install --user -q -r requirements.txt
+start "" cmd /c "timeout /t 20 >NUL & start chrome http://localhost:8501"
+py -3.13 -m streamlit run app.py --server.headless true
+pause
+```
+
+Para crear el acceso directo: clic derecho en el `.bat` → **Enviar a** → **Escritorio (crear acceso
+directo)**, y renombrarlo.
 
 ### Instalación (solo la primera vez en esta compu)
 
