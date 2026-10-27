@@ -9,6 +9,9 @@ App local en **Python + Streamlit** para automatizar trabajo con Excels. Se abre
   con `py -3.13 -m streamlit run app.py --server.headless true`. No pasarle comandos con `.venv`.
   Esa carpeta la usan **dos compus** (la de Mateo y la del jefe): un `git checkout` en una cambia la
   carpeta para las dos. Acceso directo del escritorio: `abrir_app_windows.bat` (siempre vuelve a `main`).
+  Para crear o cambiar accesos directos (`.bat`) seguir las reglas de la sección «Accesos directos» de
+  la guía: los de ramas van **afuera** de `ferrovias`, `%~dp0` en vez de la ruta, sin tildes, `>NUL` (nunca
+  `/dev/null`), fin de línea CRLF.
 
 Es usuario no técnico: explicale en español, simple y con pasos concretos.
 
@@ -43,6 +46,9 @@ transcripción) para asociarlas, o se descartan. Lo resuelto queda en gris hasta
 Cada novedad tiene a la izquierda 🗑️ (descartar solo esa) y ! / !! (marca amarilla / naranja: resalta su
 fila en el Excel final; las novedades unidas —tildadas juntas o asociadas— comparten la marca, y al
 asociar con marcas distintas gana la naranja).
+«📅 Unir con otro día» (st.dialog): suma novedades de PCZ de otros días al grupo, con Fecha y N° Novedad
+elegidos para el Excel (`fecha`/`numero` en la asociación, y `extras` con los valores elegidos de
+Comienzo de falla / Habilitación: `ELEGIBLES_UNION`); el paso ② propone avisos de todos esos días.
 Candidatos solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple
 sin IA. El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas
 Asociaciones (TODAS las novedades de PCZ ordenadas por día: una fila por asociación y una por novedad sin

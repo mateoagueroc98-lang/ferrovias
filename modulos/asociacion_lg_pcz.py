@@ -29,6 +29,16 @@ def preparar(nombre_lg, bytes_lg, nombre_pcz, bytes_pcz, mapa_lg, mapa_pcz):
     return lg, pcz
 
 
+def como_en_excel(v) -> str:
+    """Valor como se va a ver en el Excel: fechas d/m/aaaa (y h:mm si tienen hora)."""
+    if v is None or (not isinstance(v, str) and pd.isna(v)):
+        return ""
+    if hasattr(v, "day"):
+        fecha = f"{v.day}/{v.month}/{v.year}"
+        return fecha + (f" {v.hour}:{v.minute:02d}" if getattr(v, "hour", 0) or getattr(v, "minute", 0) else "")
+    return str(v)
+
+
 def ir_a_paso(paso: str):
     ss[P + "paso"] = paso
 
@@ -230,15 +240,6 @@ if paso == PASOS[2]:
     ss[P + "numero_inicial"] = numero_inicial  # se recuerda si vas y volvés de este paso
     tabla = a.tabla_asociaciones(lg, pcz, trabajo, int(numero_inicial))
     st.caption(f"Vista previa ({len(tabla)} fila(s)):")
-    def como_en_excel(v) -> str:
-        """Valor como se va a ver en el Excel: fechas d/m/aaaa (y h:mm si tienen hora)."""
-        if v is None or (not isinstance(v, str) and pd.isna(v)):
-            return ""
-        if hasattr(v, "day"):
-            fecha = f"{v.day}/{v.month}/{v.year}"
-            return fecha + (f" {v.hour}:{v.minute:02d}" if getattr(v, "hour", 0) or getattr(v, "minute", 0) else "")
-        return str(v)
-
     st.dataframe(tabla.head(20).map(como_en_excel), hide_index=True, use_container_width=True)
 
     nombre = st.text_input("Nombre del archivo a descargar", value="asociacion_LG_PCZ")
@@ -304,7 +305,20 @@ def ir_a_avisos():
 
 
 def volver_a_novedades():
-    borrador()["etapa"] = "pcz"
+    """Vuelve al paso 1. Si se habían unido novedades de otro día, la unión se deshace."""
+    b = borrador()
+    b["etapa"] = "pcz"
+    b["novedades"] = [k for k in b["novedades"] if k in del_dia()]
+    for clave in ("fecha", "numero", "extras"):
+        b.pop(clave, None)
+
+
+def abrir_union():
+    """📅 Unir con otro día: abre la ventana (arranca con las de otro día que ya estaban unidas)."""
+    b = borrador()
+    ss[P + "union"] = {"etapa": "buscar", "abierta": ss.get(P + "union", {}).get("abierta", 0) + 1,
+                       "elegidas": [k for k in b["novedades"] if k not in del_dia()]}
+    ss[P + "abrir_union"] = True
 
 
 def seguir():
@@ -325,7 +339,7 @@ def seguir():
 def asociar():
     b = borrador()
     if b["novedades"] and b["avisos"]:
-        a.asociar(trabajo, b["novedades"], b["avisos"])
+        a.asociar(trabajo, b["novedades"], b["avisos"], b.get("fecha"), b.get("numero"), b.get("extras"))
         seguir()
 
 
@@ -342,6 +356,8 @@ def desechar(k: int):
     b = borrador()
     if k in b["novedades"]:
         b["novedades"].remove(k)
+        for clave in ("fecha", "numero", "extras"):  # si era una unión con otro día, vuelve lo de siempre
+            b.pop(clave, None)
     if not b["novedades"]:
         b["etapa"] = "pcz"
     if not a.pendientes(trabajo, del_dia()):
@@ -428,7 +444,9 @@ asociacion_de = a.asociacion_de(trabajo)
 
 def titulo_novedad(k: int) -> str:
     hora = a.formatear_hora(pcz.loc[k, "hora"])
-    return f"N° {pcz.loc[k, 'id']}" + (f" · {hora}" if hora else "")
+    fecha = pcz.loc[k, "fecha"]
+    otro_dia = f" · 📅 {a.formatear_fecha(fecha) if fecha else 'sin fecha'}" if fecha != dia else ""
+    return f"N° {pcz.loc[k, 'id']}" + otro_dia + (f" · {hora}" if hora else "")
 
 
 def color_de(k: int) -> str:
@@ -589,11 +607,18 @@ with st.container(border=True):
                 st.markdown(html_vacia("todavía ninguno ↓ tildalos en la lista de abajo"), unsafe_allow_html=True)
 
         fila_tabla(izq_nueva, der_nueva)
+        if "fecha" in b or "numero" in b:
+            elegidos = "".join(f" · **{n}:** {' | '.join(como_en_excel(v) for v in vs) or '(vacía)'}"
+                               for n, vs in b.get("extras", {}).items())
+            st.caption(f"📅 Unidas con otro día. En el Excel van con **Fecha {a.formatear_fecha(b.get('fecha'))}** · "
+                       f"**N° Novedad {b.get('numero', '')}**{elegidos} (para cambiarlo, tocá «📅 Unir con otro día»).")
 
 # ---------------------------------------------------------- avisos del LG
 if b["etapa"] == "lg":
     nov = a.novedad_combinada(pcz, b["novedades"])
-    st.subheader("Avisos del LG " + (f"del {a.formatear_fecha(dia)}" if dia else ""), anchor=False)
+    # Novedades unidas de varios días: se muestran los avisos de todos esos días
+    dias_txt = " y ".join(a.formatear_fecha(f) for f in nov["fechas"]) if dia else ""
+    st.subheader("Avisos del LG " + (f"del {dias_txt}" if dia else ""), anchor=False)
     f1, f2 = st.columns([3, 2], vertical_alignment="bottom")
     busqueda = f1.text_input("🔎 Buscar en los avisos", key=f"{P}buscar_{dia_idx}",
                              placeholder="Ej.: Boulogne 14  (filtra por texto)", label_visibility="collapsed")
@@ -610,7 +635,7 @@ if b["etapa"] == "lg":
     sin_fecha = a.buscar(a.avisos_sin_fecha(nov, avisos_lg), busqueda)
 
     if dia is not None:
-        st.caption(f"{cant_dia} aviso(s) ese día"
+        st.caption(f"{cant_dia} aviso(s) {'esos días' if len(nov['fechas']) > 1 else 'ese día'}"
                    + (f" · {len(cands)} coinciden con la búsqueda" if busqueda else "")
                    + " · ordenados por parecido con las novedades elegidas (en amarillo, lo que coincide)",
                    help="Puntaje: número compartido 3 (1 si es de una cifra) · palabra compartida 1 · "
@@ -674,7 +699,7 @@ if b["etapa"] == "lg":
     else:
         if mismo.empty:
             st.info("No hay avisos del LG " + ("que coincidan con la búsqueda " if busqueda else "")
-                    + f"con fecha {a.formatear_fecha(dia)}. Si no tienen evento en el LG, tocá «Descartar».")
+                    + f"con fecha {dias_txt}. Si no tienen evento en el LG, tocá «Descartar».")
         dibujadas = mostrar(mismo, 1, None, "mismo")
         if vecinos:
             st.markdown("##### 🌙 OTRO DÍA (día anterior / siguiente)")
@@ -684,6 +709,82 @@ if b["etapa"] == "lg":
     if len(sin_fecha):
         with st.expander(f"Avisos del LG sin fecha reconocible ({len(sin_fecha)})"):
             mostrar(sin_fecha, dibujadas + 1, "SIN FECHA", "sin_fecha")
+
+# ------------------------------------------- ventana: unir con otro día
+AYUDA_UNION = ("Une las novedades elegidas con novedades de PCZ de otro día (el mismo evento cargado en "
+               "días distintos). Después se eligen los avisos del LG para todo el grupo.")
+
+
+@st.dialog("📅 Unir con novedades de otro día", width="large")
+def ventana_union():
+    b = borrador()
+    u = ss[P + "union"]
+    propias = [k for k in b["novedades"] if k in novedades_dia]
+    st.markdown("**Novedades elegidas:** " + " · ".join(titulo_novedad(k) for k in propias))
+
+    if u["etapa"] == "buscar":
+        c1, c2 = st.columns([1, 2])
+        otros_dias = [d for d in dias if d is not None and d != dia]
+        filtro = c1.selectbox("Día", [None] + otros_dias, key=f"{P}un_dia_{u['abierta']}",
+                              format_func=lambda d: "Todos los días" if d is None else a.formatear_fecha(d))
+        texto = c2.text_input("Buscar palabras", key=f"{P}un_texto_{u['abierta']}",
+                              placeholder="Ej.: señal 14 Boulogne")
+        lista = a.novedades_para_unir(pcz, trabajo, propias, excluir_dia=dia, dia=filtro, texto=texto)
+        visibles = pd.concat([lista.head(30), lista[lista["pos"].isin(u["elegidas"]) & ~lista.index.isin(
+            lista.head(30).index)]])
+        st.caption(f"{len(lista)} novedad(es) de otros días sin asociar"
+                   + (f" · se muestran las {len(visibles)} más parecidas" if len(lista) > len(visibles) else "")
+                   + ". Tildá las que son el mismo evento:")
+        with st.container(height=330, border=True):
+            if lista.empty:
+                st.caption("No hay novedades que coincidan.")
+            for _, fila in visibles.iterrows():
+                k = int(fila["pos"])
+                hora = a.formatear_hora(fila["hora"])
+                etiqueta = (f"**N° {fila['id']}** · {a.formatear_fecha(fila['fecha']) or 'sin fecha'}"
+                            + (f" · {hora}" if hora else "")
+                            + (" · _descartada_" if k in trabajo["descartadas"] else "")
+                            + f" — {fila['descripcion'] or '(sin descripción)'}")
+                if st.checkbox(etiqueta, value=k in u["elegidas"], key=f"{P}un_{u['abierta']}_{k}"):
+                    if k not in u["elegidas"]:
+                        u["elegidas"].append(k)
+                elif k in u["elegidas"]:
+                    u["elegidas"].remove(k)
+        d1, d2 = st.columns([3, 1], vertical_alignment="center")
+        d1.caption(f"{len(u['elegidas'])} elegida(s) de otro día")
+        if d2.button("OK", type="primary", disabled=not u["elegidas"], use_container_width=True):
+            u["etapa"] = "elegir"
+            st.rerun(scope="fragment")
+    else:
+        todas = sorted(propias + u["elegidas"])
+        st.markdown("".join(html_pcz(k) for k in todas), unsafe_allow_html=True)
+        fechas, numeros = a.opciones_union(pcz, todas)
+        c1, c2 = st.columns(2)
+        fecha = c1.radio("Fecha para el Excel (una sola)", fechas, format_func=a.formatear_fecha,
+                         key=f"{P}un_fecha_{u['abierta']}") if fechas else None
+        numero = c2.radio("N° Novedad para el Excel", numeros, index=len(numeros) - 1,
+                          key=f"{P}un_numero_{u['abierta']}")
+        # Comienzo de falla / Habilitación: si las novedades traen valores distintos, se elige uno o varios
+        extras = {}
+        columnas_extra = [(n, v) for n in a.ELEGIBLES_UNION if len(v := a.valores_union(pcz, todas, n)) > 1]
+        for col, (nombre, valores) in zip(st.columns(2) if columnas_extra else [], columnas_extra):
+            col.markdown(f"<div style='font-size:0.875rem'>{nombre} para el Excel (una o varias)</div>",
+                         unsafe_allow_html=True)
+            extras[nombre] = [v for i, (v, ids) in enumerate(valores) if col.checkbox(
+                f"{como_en_excel(v)} — N° {', '.join(ids)}", value=True, key=f"{P}un_{nombre}_{u['abierta']}_{i}")]
+        d1, d2 = st.columns(2)
+        if d1.button("⬅️ Volver a buscar", use_container_width=True):
+            u["etapa"] = "buscar"
+            st.rerun(scope="fragment")
+        if d2.button("✅ Confirmar y elegir avisos del LG", type="primary", use_container_width=True):
+            b.update(novedades=todas, etapa="lg", numero=numero, extras=extras)
+            if fecha is not None:
+                b["fecha"] = fecha
+            st.rerun()
+
+
+if ss.pop(P + "abrir_union", False):
+    ventana_union()
 
 # ------------------------------------------------- botones de acción
 # Van al final de la página y quedan pegados abajo de la pantalla mientras se hace scroll
@@ -700,15 +801,18 @@ with st.container(key="barra_acciones"):
         if len(pend_dia) > 1:
             botones.append((1, "☑ Todas", dict(on_click=todas_las_pendientes,
                                                help="Tilda todas las novedades pendientes del día.")))
+        botones.append((1.5, "📅 Unir con otro día", dict(on_click=abrir_union, disabled=not b["novedades"],
+                                                         help=AYUDA_UNION)))
     else:
         botones = [
             (1.3, "✅ Asociar", dict(type="primary", on_click=asociar, disabled=not b["avisos"])),
             (1.3, "🗑️ Descartar", dict(on_click=descartar, help="Estas novedades no tienen aviso en el LG: salen "
                                                                 "en el Excel solo con su texto de PCZ.")),
             (1.6, "⬅️ Volver a las novedades", dict(on_click=volver_a_novedades)),
+            (1.5, "📅 Unir con otro día", dict(on_click=abrir_union, help=AYUDA_UNION)),
         ]
     # Columnas vacías a los costados para que los botones queden centrados
-    margen = (5.5 - sum(ancho for ancho, _, _ in botones)) / 2
+    margen = (7 - sum(ancho for ancho, _, _ in botones)) / 2
     columnas = st.columns([margen] + [ancho for ancho, _, _ in botones] + [margen])
     for col, (_, texto, opciones) in zip(columnas[1:-1], botones):
         col.button(texto, use_container_width=True, **opciones)
@@ -724,6 +828,7 @@ window.parent.__lgpczTeclas = function (e) {
   const escribe = t && (t.tagName === 'TEXTAREA' || t.isContentEditable ||
     (t.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes(t.type)));
   if (escribe || e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
+  if (doc.querySelector('[role="dialog"]')) return;  // con la ventana «Unir con otro día» abierta, nada
   const boton = (txt) => Array.from(doc.querySelectorAll('button'))
     .find(b => b.innerText.trim().endsWith(txt) && !b.disabled);
   if (!Array.from(doc.querySelectorAll('button')).some(b => b.innerText.trim().endsWith('Anterior'))) return;
