@@ -2,6 +2,7 @@
 import copy
 import datetime as dt
 import hashlib
+import html
 import os
 import threading
 import time
@@ -254,6 +255,7 @@ def al_guardar_correcciones(campos: list[tuple[str, str, str]]) -> None:
             ss[P + "correcciones"][clave] = {"texto": texto, "base": original}
             cambios += 1
     ss[P + "msg_corr"] = ("success", "Corrección guardada.") if cambios else ("info", "No había cambios.")
+    ss.pop(P + "editando", None)
 
 
 def reintentar(i: int, hasta_el_final: bool) -> None:
@@ -307,30 +309,58 @@ def seccion_proceso(s: dict) -> None:
                 st.rerun()
 
 
+# Texto de cada fila para leer, con las palabras dudosas ([?]) resaltadas en amarillo.
+ESTILO_TEXTO = """
+.tlg-fila { font-size: .85rem; color: #5B5754; margin: .6rem 0 .25rem; }
+.tlg-texto { white-space: pre-wrap; background: #FFFFFF; border: 1px solid #D3CFCC; border-radius: .3rem;
+             padding: .7rem .9rem; line-height: 1.55; font-size: .95rem; max-height: 520px; overflow-y: auto; }
+.tlg-texto mark { background: #FFE27A; color: inherit; padding: 0 .15em; border-radius: 2px; }
+"""
+
+
+def etiqueta_fila(f: dict) -> str:
+    texto = f"{f['Folio']} · {f['Fecha'] or 'sin fecha'}"
+    return texto + (f" · ⚠️ revisar: {f['Revisar']}" if f["Revisar"] else "")
+
+
 def seccion_comparar(s: dict, tandas: list[tl.Tanda], unidas: list[tl.Fila], filas: list[dict]) -> None:
     st.header("Comparar con el libro")
     paginas = tl.paginas_revisables(tandas, unidas)
     if not paginas:
         st.info("Todavía no llegó ninguna página. Aparecen acá a medida que Claude las transcribe.")
         return
-    st.caption("Elegí un folio: a la izquierda su transcripción (se puede corregir) y a la derecha la "
-               "página escaneada.")
+    st.caption("Elegí un folio: a la izquierda su transcripción y a la derecha la página escaneada. "
+               "En amarillo, las palabras que Claude no entendió bien (las que marcó con [?]). "
+               "Para cambiar el texto, ✏️ Corregir.")
+
+    def dudosos(pag) -> int:
+        return sum(filas[n]["Transcripción"].count("[?]") for n in pag["filas"])
 
     def etiqueta(k):
         pag = paginas[k]
         folio = f"folio {pag['folio']:02d}" if pag["folio"] is not None else f"pág. {pag['pagina'] + 1} del PDF"
         fechas = pag["fechas"]
         fecha = (fechas[0] if len(fechas) == 1 else f"{fechas[0]} al {fechas[-1]}") if fechas else "sin fecha"
-        return f"{folio} · {fecha}"
+        n = dudosos(pag)
+        return f"{folio} · {fecha}" + (f" · {n} [?]" if n else "")
 
     k = st.selectbox("Folio", range(len(paginas)), format_func=etiqueta, key=P + "folio")
     pag = paginas[min(k or 0, len(paginas) - 1)]
+    editando = ss.get(P + "editando") == pag["pagina"]
     izq, der = st.columns([1, 1], gap="medium")
     with izq:
         if msg := ss.pop(P + "msg_corr", None):
             getattr(st, msg[0])(msg[1])
         if not pag["filas"]:
             st.info("Esta página no tiene texto transcripto.")
+        elif not editando:
+            st.html(f"<style>{ESTILO_TEXTO}</style>" + "".join(
+                f'<div class="tlg-fila">{html.escape(etiqueta_fila(filas[n]))}</div>'
+                f'<div class="tlg-texto">{tl.marcar_dudosos(filas[n]["Transcripción"])}</div>'
+                for n in pag["filas"]))
+            if st.button("✏️ Corregir", key=P + "corregir"):
+                ss[P + "editando"] = pag["pagina"]
+                st.rerun()
         else:
             campos = []
             with st.form(P + "form_corr", border=False):
@@ -339,13 +369,13 @@ def seccion_comparar(s: dict, tandas: list[tl.Tanda], unidas: list[tl.Fila], fil
                     # La clave cambia si el texto cambia (p. ej. llegó la continuación): el cuadro se renueva.
                     widget = f"{P}corr_{f['clave']}_{hashlib.sha1(f['Transcripción'].encode()).hexdigest()[:8]}"
                     campos.append((f["clave"], widget, f["original"]))
-                    etiqueta_fila = f"{f['Folio']} · {f['Fecha'] or 'sin fecha'}"
-                    if f["Revisar"]:
-                        etiqueta_fila += f" · ⚠️ revisar: {f['Revisar']}"
-                    st.text_area(etiqueta_fila, value=f["Transcripción"], key=widget,
+                    st.text_area(etiqueta_fila(f), value=f["Transcripción"], key=widget,
                                  height=520 if len(pag["filas"]) == 1 else 300)
-                st.form_submit_button("💾 Guardar corrección", type="primary",
+                b1, b2 = st.columns(2)
+                b1.form_submit_button("💾 Guardar corrección", type="primary", width="stretch",
                                       on_click=al_guardar_correcciones, args=(campos,))
+                b2.form_submit_button("Cancelar", width="stretch",
+                                      on_click=lambda: ss.pop(P + "editando", None))
     with der:
         st.image(s["imagenes"][pag["pagina"]], width="stretch")
 

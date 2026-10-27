@@ -11,6 +11,7 @@ va en un archivo local de esa carpeta que NO va a git (cambia con cada transcrip
 """
 import base64
 import datetime as dt
+import html
 import io
 import json
 import re
@@ -613,6 +614,21 @@ def paginas_revisables(tandas: list[Tanda], filas: list[Fila]) -> list[dict]:
             fechas = list(dict.fromkeys(filas[n].fecha for n in propias if filas[n].fecha))
             paginas.append({"pagina": p, "folio": folio, "fechas": fechas, "filas": propias})
     return paginas
+
+
+# Palabra dudosa: la que el modelo marcó con [?] justo después ("CORRIÓ [?]", "5202 [?]").
+_DUDOSO = re.compile(r"(?:\S+[ \t]*)?\[\?\]")
+
+
+def marcar_dudosos(texto: str) -> str:
+    """Texto en HTML (escapado) con cada palabra dudosa y su [?] dentro de <mark>, para resaltarla."""
+    partes, inicio = [], 0
+    for m in _DUDOSO.finditer(texto):
+        partes.append(html.escape(texto[inicio:m.start()], quote=False))
+        partes.append(f"<mark>{html.escape(m.group(), quote=False)}</mark>")
+        inicio = m.end()
+    partes.append(html.escape(texto[inicio:], quote=False))
+    return "".join(partes)
 
 
 def aplicar_correccion(texto: str, correccion: dict | None) -> str:

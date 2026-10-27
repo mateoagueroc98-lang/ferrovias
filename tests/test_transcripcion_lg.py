@@ -354,6 +354,15 @@ def test_paginas_revisables_sin_folio_legible():
     assert [(p["folio"], p["filas"]) for p in paginas] == [(None, [0, 1]), (None, [])]
 
 
+def test_marcar_dudosos():
+    assert tl.marcar_dudosos("(TAMPOCO CORRIÓ [?]).") == "(TAMPOCO <mark>CORRIÓ [?]</mark>)."
+    assert tl.marcar_dudosos("QUIÉN ACUSÓ [?] Q' NO") == "QUIÉN <mark>ACUSÓ [?]</mark> Q' NO"
+    assert tl.marcar_dudosos("[firma: DSSN] 5202 [?]") == "[firma: DSSN] <mark>5202 [?]</mark>"
+    assert tl.marcar_dudosos("SE[?]AL") == "<mark>SE[?]</mark>AL"
+    assert tl.marcar_dudosos("[?] al principio\nA < B [ilegible]") == "<mark>[?]</mark> al principio\nA &lt; B [ilegible]"
+    assert tl.marcar_dudosos("sin dudas") == "sin dudas"
+
+
 def test_aplicar_correccion():
     corr = {"texto": "A corregido", "base": "A origna"}
     assert tl.aplicar_correccion("A origna", None) == "A origna"
