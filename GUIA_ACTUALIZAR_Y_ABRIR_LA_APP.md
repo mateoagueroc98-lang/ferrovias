@@ -176,8 +176,18 @@ Igual que en la Mac: recargar la página o volver a abrir la app (no hay nada gu
 ### Llevar la configuración de «Transcripciones del LG» a la otra compu
 
 Lo que se guarda en ⚙️ Configuración (instrucciones, referencia, modelo) queda en la carpeta
-`config\transcripcion_lg` del proyecto. Para que llegue a la Mac, subirlo a GitHub (con la app cerrada,
-en la ventana negra):
+`config\transcripcion_lg` del proyecto. Para que llegue a la Mac hay que subirlo a GitHub.
+
+**Una sola vez por usuario de Windows** (en esta compu nunca se subió nada: Git no sabe quién sos).
+En la ventana negra, con tu nombre y el mail de tu cuenta de GitHub:
+
+```
+git config --global user.name "Tu Nombre"
+git config --global user.email "tu-mail@ejemplo.com"
+```
+
+**Cada vez que quieras subir la configuración** (con la app cerrada y la carpeta en `main`, o sea,
+después de haber usado el acceso directo del escritorio):
 
 ```
 cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
@@ -186,9 +196,16 @@ git commit -m "Transcripciones del LG: actualizo la configuración"
 git push
 ```
 
-En la Mac llega con el `git pull` de todos los días (y al revés: en la Mac los mismos tres comandos
-`git add` / `git commit` / `git push` desde `~/ferrovias`). Editar la configuración **en un solo lugar a
-la vez**: si se cambia el mismo documento en las dos compus sin subirlo, `git pull` va a dar error.
+- La **primera vez** que hagas `git push` se abre una ventana para **iniciar sesión en GitHub**: elegir
+  *Sign in with your browser* y entrar con tu cuenta (la dueña del repositorio). Después queda
+  recordado y no lo vuelve a pedir.
+- Si `git push` dice *rejected* / *fetch first*: hay cambios nuevos en GitHub. Correr `git pull` y
+  después otra vez `git push`.
+- En la Mac llega con el `git pull` de todos los días. Al revés es igual: en la Mac los mismos
+  `git add` / `git commit` / `git push` desde `~/ferrovias`.
+- **Editar la configuración en un solo lugar a la vez.** Si se cambia el mismo documento en las dos
+  compus sin subirlo, `git pull` va a dar error (*conflict* o *would be overwritten*). Si pasa,
+  avisale a Claude antes de tocar nada.
 
 ### Instalación (solo la primera vez en esta compu)
 

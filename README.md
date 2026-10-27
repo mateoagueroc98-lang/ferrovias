@@ -204,6 +204,10 @@ Excel antes de cerrar. Si reintentás una tanda, se pierden las correcciones hec
 
 **⚙️ Configuración** (queda guardada)
 - **Modelo**: Claude Opus 5.5 (por defecto, el mejor) o Claude Sonnet 5.5 (la mitad de precio).
+- **Conexión con Claude**: muestra si la app encontró la clave en el `.env` y el botón **🔌 Probar la
+  conexión con Claude**, que comprueba la clave, que la red deje llegar a `api.anthropic.com` y que el
+  modelo esté disponible, sin gastar crédito. Si en plena transcripción falla la clave, la conexión o
+  el crédito, la app frena y explica qué pasó (las tandas que faltan se reintentan después).
 - **Instrucciones** (`PROMPT_Sistema_Transcripcion_LG.md`, va como *system prompt*; define el formato
   del JSON) y **Documento de referencia** (`REFERENCIA_Transcripcion_LG.md`: jerga, letra de cada
   escritor, pasos a nivel). Se editan en pantalla y se **💾 Guardan**. Al lado se ve cuántos tokens

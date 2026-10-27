@@ -67,21 +67,14 @@ def procesar(indices: list[int]) -> None:
         contenido = tl.mensaje_usuario([s["imagenes"][p] for p in t.paginas], t.paginas, contexto)
         try:
             tl.procesar_tanda(t, llamar, system, contenido, contexto)
-        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError):
-            t.estado = "error"
-            t.error = "La clave de Anthropic no es válida o no tiene permiso."
-            st.error("La clave de Anthropic (ANTHROPIC_API_KEY en el archivo .env) no es válida. "
-                     "Se frenó la transcripción.")
-            break
-        except anthropic.NotFoundError:
-            t.estado = "error"
-            t.error = f"El modelo {modelo} no existe o la clave no tiene acceso."
-            st.error(t.error + " Elegí otro en ⚙️ Configuración.")
-            break
-        except (anthropic.APIStatusError, anthropic.APIConnectionError) as e:
-            t.estado = "error"
-            t.error = f"Error de la API: {getattr(e, 'message', e)}"
-            t.intentos.append({"cruda": "", "uso": [], "error": t.error, "contexto": contexto})
+        except anthropic.APIError as e:
+            mensaje, frenar = tl.explicar_error(e, modelo)
+            t.estado, t.error = "error", mensaje
+            t.intentos.append({"cruda": "", "uso": [], "error": mensaje, "contexto": contexto})
+            if frenar:  # las demás tandas fallarían igual: se frena y se avisa
+                ss[P + "aviso"] = (mensaje + " Se frenó la transcripción. Cuando esté resuelto, tocá "
+                                   "«🔁 Reintentar» en la tanda con ❌ y elegí «hasta el final».")
+                break
     barra.progress(1.0, text="Listo.")
     # Cambiaron las filas: las correcciones a mano ya no corresponden.
     ss[P + "correcciones"] = {}
@@ -205,6 +198,8 @@ def pantalla_revisar():
     if s is None:
         st.info("Todavía no hay ninguna transcripción. Empezá en ① Transcribir.")
         return
+    if aviso := ss.pop(P + "aviso", None):
+        st.error(aviso)
     tandas = s["tandas"]
     filas = filas_finales(s)
     res = tl.resumen(tl.unir_tandas(tandas), tandas)
@@ -393,6 +388,23 @@ def al_descartar(clave: str) -> None:
     ss[f"{P}doc_{clave}"] = tl.leer_documento(clave)
 
 
+def al_probar_conexion() -> None:
+    modelo = tl.leer_ajustes()["modelo"]
+    if not hay_clave():
+        ss[P + "conexion"] = ("error", "No se encontró la clave: falta la línea ANTHROPIC_API_KEY=... en el "
+                                  "archivo .env de la carpeta de la app (después de crearla, volvé a abrir la app).")
+        return
+    try:
+        nombre = tl.probar_conexion(anthropic.Anthropic(), modelo)
+    except anthropic.APIError as e:
+        ss[P + "conexion"] = ("error", tl.explicar_error(e, modelo)[0])
+    except Exception as e:  # p. ej. clave con formato raro
+        ss[P + "conexion"] = ("error", f"No se pudo probar la conexión: {e}")
+    else:
+        ss[P + "conexion"] = ("success", f"Conexión OK: la clave funciona, la red deja llegar a Anthropic y el "
+                                    f"modelo {nombre} está disponible. (El crédito que queda se ve en la consola.)")
+
+
 def al_cambiar_modelo() -> None:
     ajustes = tl.leer_ajustes()
     ajustes["modelo"] = ss[P + "modelo"]
@@ -417,6 +429,19 @@ def pantalla_configuracion():
     entrada, salida, _, _ = tl.PRECIOS[ss[P + "modelo"]]
     st.caption(f"Precio: US\\$ {entrada:g} por millón de tokens de entrada y US\\$ {salida:g} por millón de "
                f"salida. Las tandas son siempre de {tl.PAGINAS_POR_TANDA} páginas.")
+
+    st.header("Conexión con Claude")
+    clave = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if clave:
+        st.markdown(f"Clave de Anthropic: ✅ encontrada en el `.env` (termina en `…{clave[-4:]}`).")
+    else:
+        st.markdown("Clave de Anthropic: ❌ **no encontrada**. Creá el archivo `.env` (copiando `.env.example`) "
+                    "con la línea `ANTHROPIC_API_KEY=...` y volvé a abrir la app.")
+    st.button("🔌 Probar la conexión con Claude", key=P + "probar", on_click=al_probar_conexion)
+    st.caption("Comprueba la clave, que la red deje llegar a api.anthropic.com y que el modelo esté "
+               "disponible. No gasta crédito.")
+    if resultado := ss.pop(P + "conexion", None):
+        getattr(st, resultado[0])(resultado[1])
 
     for clave in ("instrucciones", "referencia"):
         st.header(NOMBRES[clave])

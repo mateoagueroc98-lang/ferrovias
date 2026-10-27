@@ -272,7 +272,8 @@ def test_armar_tandas_siempre_de_a_3():
 
 
 def test_paginas_a_imagenes_con_pdf_de_ejemplo():
-    generar()
+    if not ARCHIVO.exists():
+        generar()
     imagenes = tl.paginas_a_imagenes(ARCHIVO.read_bytes())
     assert len(imagenes) == len(PAGINAS) == 7
     img = Image.open(io.BytesIO(imagenes[0]))
@@ -352,3 +353,44 @@ def test_ajustes(carpeta):
     assert tl.leer_ajustes(carpeta)["modelo"] == "claude-sonnet-5-5"
     tl.guardar_ajustes({"modelo": "modelo-que-no-existe"}, carpeta)
     assert tl.leer_ajustes(carpeta)["modelo"] == tl.MODELO_DEFECTO
+
+
+# ------------------------------------------------------- errores y conexión
+def _error_api(clase, estado: int, mensaje: str = "error"):
+    import anthropic
+    import httpx2
+    pedido = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    if clase in (anthropic.APIConnectionError, anthropic.APITimeoutError):
+        return clase(request=pedido)
+    return clase(mensaje, response=httpx2.Response(estado, request=pedido), body=None)
+
+
+def test_explicar_error():
+    import anthropic
+    casos = [
+        (_error_api(anthropic.AuthenticationError, 401), "no es válida", True),
+        (_error_api(anthropic.NotFoundError, 404), "claude-opus-5-5", True),
+        (_error_api(anthropic.BadRequestError, 400, "Your credit balance is too low"), "crédito", True),
+        (_error_api(anthropic.RateLimitError, 429), "Esperá", True),
+        (_error_api(anthropic.APIConnectionError, 0), "Sistemas", True),
+        (_error_api(anthropic.APITimeoutError, 0), "tardó demasiado", False),
+        (_error_api(anthropic.InternalServerError, 500), "servidores", False),
+        (_error_api(anthropic.BadRequestError, 400, "imagen muy grande"), "imagen muy grande", False),
+    ]
+    for error, texto, frenar in casos:
+        mensaje, frena = tl.explicar_error(error, "claude-opus-5-5")
+        assert texto in mensaje and frena is frenar, (type(error).__name__, mensaje)
+
+
+def test_explicar_error_certificado():
+    import anthropic
+    e = _error_api(anthropic.APIConnectionError, 0)
+    e.__cause__ = Exception("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
+    mensaje, frena = tl.explicar_error(e, "claude-opus-5-5")
+    assert "certificado" in mensaje and frena
+
+
+def test_probar_conexion():
+    cliente = SimpleNamespace(models=SimpleNamespace(
+        retrieve=lambda modelo: SimpleNamespace(display_name=f"Nombre de {modelo}")))
+    assert tl.probar_conexion(cliente, "claude-opus-5-5") == "Nombre de claude-opus-5-5"

@@ -422,6 +422,45 @@ def llamar_api(client, modelo: str, system: list[dict], contenido: list[dict]) -
     return texto, uso
 
 
+def probar_conexion(client, modelo: str) -> str:
+    """Comprueba clave, red y acceso al modelo sin gastar crédito. Devuelve el nombre del modelo."""
+    return client.models.retrieve(modelo).display_name
+
+
+def explicar_error(e: Exception, modelo: str) -> tuple[str, bool]:
+    """Error de la API → (mensaje para mostrar, si conviene frenar todas las tandas que faltan)."""
+    import anthropic
+
+    detalle = str(getattr(e, "message", "") or e)
+    if isinstance(e, anthropic.AuthenticationError):
+        return ("La clave de Anthropic no es válida. Revisá la línea ANTHROPIC_API_KEY del archivo .env "
+                "(la clave completa, sin espacios ni comillas) y volvé a abrir la app.", True)
+    if isinstance(e, anthropic.PermissionDeniedError):
+        return f"La clave de Anthropic no tiene permiso para usar la API ({detalle}).", True
+    if isinstance(e, anthropic.NotFoundError):
+        return f"El modelo {modelo} no existe o la clave no tiene acceso. Elegí otro en ⚙️ Configuración.", True
+    if isinstance(e, anthropic.BadRequestError) and "credit" in detalle.lower():
+        return ("No queda crédito en la cuenta de Anthropic. Cargá más en la consola "
+                "(console.anthropic.com → Billing).", True)
+    if isinstance(e, anthropic.RateLimitError):
+        return ("Anthropic frenó los pedidos por ser demasiados seguidos. Esperá un par de minutos y "
+                "reintentá las tandas que faltan.", True)
+    if isinstance(e, anthropic.APITimeoutError):
+        return "Claude tardó demasiado en responder esta tanda. Probá reintentarla.", False
+    if isinstance(e, anthropic.APIConnectionError):
+        causa = f"{e.__cause__ or ''} {e.__context__ or ''}"
+        if "CERTIFICATE_VERIFY_FAILED" in causa or "certificate" in causa.lower():
+            return ("No se pudo conectar con api.anthropic.com: la red revisa las conexiones seguras "
+                    "(problema de certificado). En la red de la empresa hay que pedirle a Sistemas que "
+                    "habilite api.anthropic.com.", True)
+        return ("No se pudo conectar con api.anthropic.com. Revisá que haya internet; si en el trabajo "
+                "anda internet pero esto no, puede que la red de la empresa lo bloquee: hay que pedirle "
+                "a Sistemas que habilite api.anthropic.com.", True)
+    if isinstance(e, anthropic.APIStatusError) and e.status_code >= 500:
+        return "Los servidores de Anthropic tuvieron un problema. Probá reintentar la tanda en un rato.", False
+    return f"Error de la API: {detalle}", False
+
+
 def _uso(respuesta) -> list[dict]:
     u = respuesta.usage
     partes = getattr(u, "iterations", None) or [u]
