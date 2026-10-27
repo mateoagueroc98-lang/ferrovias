@@ -24,7 +24,6 @@ PAGINAS_POR_TANDA = 3
 LADO_MAX_PX = 2576           # lado largo máximo que leen los modelos actuales (más no suma nitidez)
 MAX_BYTES_IMAGEN = 4_500_000  # la API acepta hasta 5 MB por imagen
 MAX_TOKENS_RESPUESTA = 32000
-ESFUERZO = "high"            # letra manuscrita difícil: conviene que el modelo piense con calma
 
 # ------------------------------------------------------------- configuración
 CARPETA_CONFIG = Path(__file__).resolve().parent.parent / "config" / "transcripcion_lg"
@@ -48,6 +47,18 @@ MODELOS = {
     "claude-sonnet-5-5": "Claude Sonnet 5.5 (la mitad de precio)",
 }
 MODELO_DEFECTO = "claude-opus-5-5"
+
+# Esfuerzo: cuánto analiza el modelo antes de responder. Más esfuerzo = lee con más cuidado, pero
+# tarda y cuesta más. Por defecto alto: la letra manuscrita es difícil.
+ESFUERZOS = {
+    "low": "Bajo (rápido y barato; más errores)",
+    "medium": "Medio",
+    "high": "Alto (recomendado)",
+    "xhigh": "Muy alto (más lento y caro)",
+}
+ESFUERZO_DEFECTO = "high"
+# Tokens de salida por página (transcripción + razonamiento) según el esfuerzo, a ojo.
+SALIDA_POR_PAGINA = {"low": 1500, "medium": 2200, "high": 3000, "xhigh": 4500}
 
 
 def tokens_aprox(texto: str) -> int:
@@ -106,7 +117,7 @@ def historial(clave: str, carpeta: Path = CARPETA_CONFIG) -> list[tuple[dt.datet
 
 
 def leer_ajustes(carpeta: Path = CARPETA_CONFIG) -> dict:
-    ajustes = {"modelo": MODELO_DEFECTO}
+    ajustes = {"modelo": MODELO_DEFECTO, "esfuerzo": ESFUERZO_DEFECTO}
     ruta = carpeta / "ajustes.json"
     if ruta.exists():
         try:
@@ -115,6 +126,8 @@ def leer_ajustes(carpeta: Path = CARPETA_CONFIG) -> dict:
             pass
     if ajustes["modelo"] not in MODELOS:
         ajustes["modelo"] = MODELO_DEFECTO
+    if ajustes["esfuerzo"] not in ESFUERZOS:
+        ajustes["esfuerzo"] = ESFUERZO_DEFECTO
     return ajustes
 
 
@@ -397,7 +410,8 @@ def system_prompt(instrucciones: str, referencia: str) -> list[dict]:
 
 
 # --------------------------------------------------------------- API de Claude
-def llamar_api(client, modelo: str, system: list[dict], contenido: list[dict]) -> tuple[str, list[dict]]:
+def llamar_api(client, modelo: str, system: list[dict], contenido: list[dict],
+               esfuerzo: str = ESFUERZO_DEFECTO) -> tuple[str, list[dict]]:
     """Una llamada a Claude. Devuelve (texto de la respuesta, uso de tokens por modelo).
 
     Lanza ErrorRespuesta si el modelo se negó o la respuesta quedó cortada.
@@ -405,7 +419,7 @@ def llamar_api(client, modelo: str, system: list[dict], contenido: list[dict]) -
     with client.beta.messages.stream(
         model=modelo,
         max_tokens=MAX_TOKENS_RESPUESTA,
-        output_config={"effort": ESFUERZO},
+        output_config={"effort": esfuerzo},
         # Si el modelo se niega, la API reintenta sola con otro modelo de respaldo.
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
@@ -413,7 +427,7 @@ def llamar_api(client, modelo: str, system: list[dict], contenido: list[dict]) -
         messages=[{"role": "user", "content": contenido}],
     ) as stream:
         respuesta = stream.get_final_message()
-    uso = _uso(respuesta)
+    uso = [{**u, "esfuerzo": esfuerzo} for u in _uso(respuesta)]
     texto = "".join(b.text for b in respuesta.content if b.type == "text")
     if respuesta.stop_reason == "refusal":
         raise ErrorRespuesta("El modelo se negó a responder esta tanda.", texto, uso)
@@ -524,14 +538,14 @@ def uso_total(tandas: list[Tanda]) -> dict:
 
 
 TOKENS_POR_PAGINA = 4800   # imagen de 2576 px de lado largo (tope de tokens por imagen)
-SALIDA_POR_PAGINA = 3000   # transcripción + razonamiento del modelo, a ojo
 
 
-def estimar_costo(n_paginas: int, tokens_documentos: int, modelo: str) -> float:
+def estimar_costo(n_paginas: int, tokens_documentos: int, modelo: str,
+                  esfuerzo: str = ESFUERZO_DEFECTO) -> float:
     """Estimación ANTES de empezar (a ojo; el costo real se muestra al terminar)."""
     n_tandas = len(armar_tandas(n_paginas))
     uso = [{"modelo": modelo, "entrada": n_paginas * (TOKENS_POR_PAGINA + 20) + n_tandas * 300,
-            "salida": n_paginas * SALIDA_POR_PAGINA,
+            "salida": n_paginas * SALIDA_POR_PAGINA[esfuerzo],
             "cache_escritura": tokens_documentos,
             "cache_lectura": tokens_documentos * max(n_tandas - 1, 0)}]
     return costo(uso)

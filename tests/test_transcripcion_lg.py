@@ -244,8 +244,9 @@ def test_llamar_api():
     texto, uso = tl.llamar_api(cliente, "claude-opus-5-5", system, [{"type": "text", "text": "x"}])
     assert texto == '{"filas": []}'
     assert uso == [{"modelo": "claude-opus-5-5", "entrada": 1000, "salida": 500,
-                    "cache_escritura": 200, "cache_lectura": 0}]
+                    "cache_escritura": 200, "cache_lectura": 0, "esfuerzo": "high"}]
     p = cliente.parametros
+    assert p["output_config"] == {"effort": "high"}
     assert p["model"] == "claude-opus-5-5" and p["system"][0]["text"] == "INSTR"
     assert "REF" in p["system"][1]["text"] and p["system"][1]["cache_control"]["type"] == "ephemeral"
     assert p["messages"][0]["role"] == "user"
@@ -348,11 +349,26 @@ def test_guardar_y_restaurar_documento(carpeta):
 
 
 def test_ajustes(carpeta):
-    assert tl.leer_ajustes(carpeta) == {"modelo": tl.MODELO_DEFECTO}
+    assert tl.leer_ajustes(carpeta) == {"modelo": "claude-opus-5-5", "esfuerzo": "high"}
+    tl.guardar_ajustes({"modelo": "claude-sonnet-5-5", "esfuerzo": "medium"}, carpeta)
+    assert tl.leer_ajustes(carpeta) == {"modelo": "claude-sonnet-5-5", "esfuerzo": "medium"}
+    tl.guardar_ajustes({"modelo": "modelo-que-no-existe", "esfuerzo": "rapidisimo"}, carpeta)
+    assert tl.leer_ajustes(carpeta) == {"modelo": tl.MODELO_DEFECTO, "esfuerzo": tl.ESFUERZO_DEFECTO}
+    # Un ajustes.json viejo, de antes del esfuerzo, sigue andando.
     tl.guardar_ajustes({"modelo": "claude-sonnet-5-5"}, carpeta)
-    assert tl.leer_ajustes(carpeta)["modelo"] == "claude-sonnet-5-5"
-    tl.guardar_ajustes({"modelo": "modelo-que-no-existe"}, carpeta)
-    assert tl.leer_ajustes(carpeta)["modelo"] == tl.MODELO_DEFECTO
+    assert tl.leer_ajustes(carpeta) == {"modelo": "claude-sonnet-5-5", "esfuerzo": "high"}
+
+
+def test_llamar_api_con_esfuerzo_elegido():
+    cliente = ClienteFalso('{"filas": []}')
+    _, uso = tl.llamar_api(cliente, "claude-opus-5-5", [], [], "medium")
+    assert cliente.parametros["output_config"] == {"effort": "medium"}
+    assert uso[0]["esfuerzo"] == "medium"
+
+
+def test_estimar_costo_sube_con_el_esfuerzo():
+    costos = [tl.estimar_costo(11, 3600, "claude-opus-5-5", e) for e in tl.ESFUERZOS]
+    assert costos == sorted(costos) and len(set(costos)) == len(costos)
 
 
 # ------------------------------------------------------- errores y conexión

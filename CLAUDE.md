@@ -56,8 +56,8 @@ Páginas → JPEG de 2576 px (`pypdfium2`), en tandas FIJAS de 3, de a una y en 
 validado; si viene mal, 1 reintento y si no, tanda con error. Unión: `continuacion_del_anterior` se pega a
 la última fila (folio «X-Y»); `cortado_al_final` sin continuación → fila para revisar. Revisión fila ↔
 página, correcciones a mano, reintentar tanda (o desde ahí al final), respuestas crudas y costo. Excel de 1
-hoja: Folio (texto) | Fecha (DD/MM/AAAA) | Hora (HH:MM) | Transcripción (ajustar texto). Los 2 documentos
-y el modelo se editan en ⚙️ Configuración y se guardan en `config/transcripcion_lg/` (SÍ va a git; con
+hoja: Folio (texto) | Fecha (DD/MM/AAAA) | Hora (HH:MM) | Transcripción (ajustar texto). Los 2 documentos,
+el modelo y el esfuerzo (`low`/`medium`/`high`/`xhigh`, por defecto `high`) se editan en ⚙️ Configuración y se guardan en `config/transcripcion_lg/` (SÍ va a git; con
 `historial/` y `originales/`); la app nunca los modifica sola. PDF inventado en `tests/ejemplos/LG_ejemplo.pdf`.
 
 **Concatenación**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por

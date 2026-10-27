@@ -204,6 +204,10 @@ Excel antes de cerrar. Si reintentás una tanda, se pierden las correcciones hec
 
 **⚙️ Configuración** (queda guardada)
 - **Modelo**: Claude Opus 5.5 (por defecto, el mejor) o Claude Sonnet 5.5 (la mitad de precio).
+- **Esfuerzo**: cuánto analiza Claude cada página antes de responder: bajo, medio, **alto** (por
+  defecto) o muy alto. Más esfuerzo = lee la letra con más cuidado, pero tarda y cuesta más (ese
+  análisis se cobra como salida). Queda guardado, igual que el modelo, y se ve en ① Transcribir y en
+  las respuestas crudas de cada intento.
 - **Conexión con Claude**: muestra si la app encontró la clave en el `.env` y el botón **🔌 Probar la
   conexión con Claude**, que comprueba la clave, que la red deje llegar a `api.anthropic.com` y que el
   modelo esté disponible, sin gastar crédito. Si en plena transcripción falla la clave, la conexión o
@@ -217,11 +221,11 @@ Excel antes de cerrar. Si reintentás una tanda, se pierden las correcciones hec
   **⏮️ Restaurar original** vuelve a la versión inicial (y lo que había también queda en el historial).
 - La app **nunca** cambia estos documentos sola.
 - Todo se guarda en `config/transcripcion_lg/` (`originales/` no se toca nunca, `historial/`, los
-  documentos vigentes y `ajustes.json` con el modelo). **Esa carpeta va a git**: para llevar los
+  documentos vigentes y `ajustes.json` con el modelo y el esfuerzo). **Esa carpeta va a git**: para llevar los
   cambios a la otra compu hay que subirlos a GitHub (ver la guía).
 
-**Costo aproximado**: con Opus 5.5, unos US$ 0,08 por página (un PDF de 11 páginas ≈ US$ 0,90); con
-Sonnet 5.5, la mitad.
+**Costo aproximado** (a ojo): con Opus 5.5 y esfuerzo alto, unos US$ 0,08 por página (un PDF de 11
+páginas ≈ US$ 0,90; con esfuerzo medio ≈ US$ 0,70); con Sonnet 5.5, la mitad.
 
 **Probarlo con datos inventados**: `tests/ejemplos/LG_ejemplo.pdf` es un libro inventado de 7 páginas
 (se regenera con `python tests/generar_ejemplo_transcripcion.py`). Los PDFs reales **no se suben** a

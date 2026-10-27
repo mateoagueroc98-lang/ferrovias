@@ -52,11 +52,12 @@ def procesar(indices: list[int]) -> None:
     tandas = s["tandas"]
     instrucciones, referencia = documentos()
     system = tl.system_prompt(instrucciones, referencia)
-    modelo = tl.leer_ajustes()["modelo"]
+    ajustes = tl.leer_ajustes()
+    modelo, esfuerzo = ajustes["modelo"], ajustes["esfuerzo"]
     client = anthropic.Anthropic()
 
     def llamar(system, contenido):
-        return tl.llamar_api(client, modelo, system, contenido)
+        return tl.llamar_api(client, modelo, system, contenido, esfuerzo)
 
     barra = st.progress(0.0)
     for k, i in enumerate(indices):
@@ -110,11 +111,13 @@ def pantalla_transcribir():
     pdf_id = hashlib.sha1(contenido).hexdigest()
     n_tandas = len(tl.armar_tandas(len(imagenes)))
     instrucciones, referencia = documentos()
-    modelo = tl.leer_ajustes()["modelo"]
-    estimado = tl.estimar_costo(len(imagenes), tl.tokens_aprox(instrucciones + referencia), modelo)
+    ajustes = tl.leer_ajustes()
+    modelo, esfuerzo = ajustes["modelo"], ajustes["esfuerzo"]
+    estimado = tl.estimar_costo(len(imagenes), tl.tokens_aprox(instrucciones + referencia), modelo, esfuerzo)
     st.markdown(f"**{len(imagenes)} páginas** → **{n_tandas} tandas** de hasta {tl.PAGINAS_POR_TANDA} "
-                f"páginas. Modelo: `{modelo}`. Costo estimado: **≈ US\\$ {estimado:.2f}** "
-                "(a ojo; el real se ve al terminar).")
+                f"páginas. Modelo: `{modelo}` · esfuerzo **{tl.ESFUERZOS[esfuerzo].split(' (')[0].lower()}**. "
+                f"Costo estimado: **≈ US\\$ {estimado:.2f}** (a ojo; el real se ve al terminar). "
+                "Modelo y esfuerzo se cambian en ⚙️ Configuración.")
     with st.expander("Ver las páginas"):
         n = st.number_input("Página", 1, len(imagenes), 1, key=P + "ver_pag")
         st.image(imagenes[n - 1], width=450)
@@ -351,6 +354,9 @@ def respuestas_crudas(tandas: list[tl.Tanda]) -> None:
                 tokens = sum(u["entrada"] + u["cache_escritura"] + u["cache_lectura"] for u in intento["uso"])
                 salida = sum(u["salida"] for u in intento["uso"])
                 modelos = ", ".join(sorted({u["modelo"] for u in intento["uso"]})) or "—"
+                esfuerzos = {u.get("esfuerzo") for u in intento["uso"]} - {None}
+                if esfuerzos:
+                    modelos += " · esfuerzo " + ", ".join(sorted(esfuerzos))
                 st.markdown(f"**Intento {k}** · {modelos} · {tokens:,} tokens de entrada · {salida:,} de "
                             f"salida · US\\$ {costo:.3f}".replace(",", "."))
                 if intento["error"]:
@@ -405,6 +411,13 @@ def al_probar_conexion() -> None:
                                     f"modelo {nombre} está disponible. (El crédito que queda se ve en la consola.)")
 
 
+def al_cambiar_esfuerzo() -> None:
+    ajustes = tl.leer_ajustes()
+    ajustes["esfuerzo"] = ss[P + "esfuerzo"]
+    tl.guardar_ajustes(ajustes)
+    ss[P + "msg"] = ("success", f"Esfuerzo guardado: {tl.ESFUERZOS[ss[P + 'esfuerzo']]}.")
+
+
 def al_cambiar_modelo() -> None:
     ajustes = tl.leer_ajustes()
     ajustes["modelo"] = ss[P + "modelo"]
@@ -421,14 +434,22 @@ def pantalla_configuracion():
     st.caption("Lo que se guarda acá queda en la carpeta `config/transcripcion_lg/` del proyecto: sigue "
                "ahí aunque cierres la app. Para llevarlo a la otra compu, subilo a GitHub (ver la guía).")
 
-    st.header("Modelo")
+    st.header("Modelo y esfuerzo")
     ajustes = tl.leer_ajustes()
     ss.setdefault(P + "modelo", ajustes["modelo"])
-    st.selectbox("Modelo de Claude", list(tl.MODELOS), format_func=lambda m: f"{tl.MODELOS[m]} · {m}",
+    ss.setdefault(P + "esfuerzo", ajustes["esfuerzo"])
+    c1, c2 = st.columns(2)
+    c1.selectbox("Modelo de Claude", list(tl.MODELOS), format_func=lambda m: f"{tl.MODELOS[m]} · {m}",
                  key=P + "modelo", on_change=al_cambiar_modelo)
+    c2.selectbox("Esfuerzo", list(tl.ESFUERZOS), format_func=lambda e: tl.ESFUERZOS[e],
+                 key=P + "esfuerzo", on_change=al_cambiar_esfuerzo)
     entrada, salida, _, _ = tl.PRECIOS[ss[P + "modelo"]]
     st.caption(f"Precio: US\\$ {entrada:g} por millón de tokens de entrada y US\\$ {salida:g} por millón de "
                f"salida. Las tandas son siempre de {tl.PAGINAS_POR_TANDA} páginas.")
+    st.caption("**Esfuerzo**: cuánto analiza Claude cada página antes de responder. Con más esfuerzo lee "
+               "la letra con más cuidado (menos [?] y menos errores en números), pero tarda más y cuesta "
+               "más, porque ese análisis se cobra como texto de salida. Se guarda y queda para las "
+               "próximas transcripciones.")
 
     st.header("Conexión con Claude")
     clave = os.getenv("ANTHROPIC_API_KEY", "").strip()
