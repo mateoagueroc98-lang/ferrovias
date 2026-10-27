@@ -206,10 +206,10 @@ Tiene 3 secciones arriba:
   puede quedar desalineada y ofrece «Reintentar solo esta» o «desde esta hasta el final».
 - **Resumen**: filas, cantidad de `[?]` y `[ilegible]`, tandas con error, filas para revisar y el
   **costo real** (con los tokens, incluidos los reintentos).
-- **Comparar con el libro**: se elige un **folio** (al lado, su fecha para guiarse y cuántos `[?]`
-  tiene); a la izquierda la transcripción de ese folio y a la derecha la página escaneada. Las palabras
-  que Claude no entendió bien (la palabra anterior a cada `[?]`, junto con el `[?]`) aparecen
-  **resaltadas en amarillo**. Con **✏️ Corregir** se edita el texto y **💾 Guardar corrección**. Las páginas aparecen a medida que Claude las transcribe, así que se puede ir
+- **Comparar con el libro**: se elige un **folio** (al lado, su fecha para guiarse y cuántos `[?]` y
+  `[ilegible]` tiene); a la izquierda la transcripción de ese folio y a la derecha la página escaneada.
+  Las palabras que Claude no entendió bien (la palabra anterior a cada `[?]`, junto con el `[?]`)
+  aparecen **resaltadas en amarillo**, y los `[ilegible]` en **rojo claro**. Con **✏️ Corregir** se edita el texto y **💾 Guardar corrección**. Las páginas aparecen a medida que Claude las transcribe, así que se puede ir
   revisando mientras trabaja. Si se corrige un párrafo cortado y después llega su continuación, la
   continuación se agrega al final de lo corregido.
   (El folio de cada página se deduce de los folios que leyó Claude en su tanda.)

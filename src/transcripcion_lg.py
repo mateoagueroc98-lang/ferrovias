@@ -617,15 +617,18 @@ def paginas_revisables(tandas: list[Tanda], filas: list[Fila]) -> list[dict]:
 
 
 # Palabra dudosa: la que el modelo marcó con [?] justo después ("CORRIÓ [?]", "5202 [?]").
-_DUDOSO = re.compile(r"(?:\S+[ \t]*)?\[\?\]")
+# [ilegible] va solo (la palabra no se pudo leer).
+_MARCAS = re.compile(r"(?P<dudoso>(?:\S+[ \t]*)?\[\?\])|(?P<ilegible>\[ilegible\])", re.IGNORECASE)
 
 
 def marcar_dudosos(texto: str) -> str:
-    """Texto en HTML (escapado) con cada palabra dudosa y su [?] dentro de <mark>, para resaltarla."""
+    """Texto en HTML (escapado) con cada palabra dudosa y su [?] dentro de <mark>, y cada [ilegible]
+    dentro de <mark class="ilegible">, para resaltarlos."""
     partes, inicio = [], 0
-    for m in _DUDOSO.finditer(texto):
+    for m in _MARCAS.finditer(texto):
         partes.append(html.escape(texto[inicio:m.start()], quote=False))
-        partes.append(f"<mark>{html.escape(m.group(), quote=False)}</mark>")
+        clase = ' class="ilegible"' if m.group("ilegible") else ""
+        partes.append(f"<mark{clase}>{html.escape(m.group(), quote=False)}</mark>")
         inicio = m.end()
     partes.append(html.escape(texto[inicio:], quote=False))
     return "".join(partes)

@@ -309,12 +309,13 @@ def seccion_proceso(s: dict) -> None:
                 st.rerun()
 
 
-# Texto de cada fila para leer, con las palabras dudosas ([?]) resaltadas en amarillo.
+# Texto de cada fila para leer, con las palabras dudosas ([?]) en amarillo y los [ilegible] en rojo claro.
 ESTILO_TEXTO = """
 .tlg-fila { font-size: .85rem; color: #5B5754; margin: .6rem 0 .25rem; }
 .tlg-texto { white-space: pre-wrap; background: #FFFFFF; border: 1px solid #D3CFCC; border-radius: .3rem;
              padding: .7rem .9rem; line-height: 1.55; font-size: .95rem; max-height: 520px; overflow-y: auto; }
 .tlg-texto mark { background: #FFE27A; color: inherit; padding: 0 .15em; border-radius: 2px; }
+.tlg-texto mark.ilegible { background: #F4C7C3; color: #8C1D18; }
 """
 
 
@@ -330,19 +331,21 @@ def seccion_comparar(s: dict, tandas: list[tl.Tanda], unidas: list[tl.Fila], fil
         st.info("Todavía no llegó ninguna página. Aparecen acá a medida que Claude las transcribe.")
         return
     st.caption("Elegí un folio: a la izquierda su transcripción y a la derecha la página escaneada. "
-               "En amarillo, las palabras que Claude no entendió bien (las que marcó con [?]). "
+               "En amarillo, las palabras que Claude no entendió bien (las que marcó con [?]); en rojo, "
+               "lo que no pudo leer ([ilegible]). "
                "Para cambiar el texto, ✏️ Corregir.")
 
-    def dudosos(pag) -> int:
-        return sum(filas[n]["Transcripción"].count("[?]") for n in pag["filas"])
+    def contar(pag, marca: str) -> int:
+        return sum(filas[n]["Transcripción"].lower().count(marca) for n in pag["filas"])
 
     def etiqueta(k):
         pag = paginas[k]
         folio = f"folio {pag['folio']:02d}" if pag["folio"] is not None else f"pág. {pag['pagina'] + 1} del PDF"
         fechas = pag["fechas"]
         fecha = (fechas[0] if len(fechas) == 1 else f"{fechas[0]} al {fechas[-1]}") if fechas else "sin fecha"
-        n = dudosos(pag)
-        return f"{folio} · {fecha}" + (f" · {n} [?]" if n else "")
+        dudas, ilegibles = contar(pag, "[?]"), contar(pag, "[ilegible]")
+        return (f"{folio} · {fecha}" + (f" · {dudas} [?]" if dudas else "")
+                + (f" · {ilegibles} [ilegible]" if ilegibles else ""))
 
     k = st.selectbox("Folio", range(len(paginas)), format_func=etiqueta, key=P + "folio")
     pag = paginas[min(k or 0, len(paginas) - 1)]

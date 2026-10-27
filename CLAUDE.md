@@ -65,7 +65,7 @@ validado; si viene mal, 1 reintento y si no, tanda con error. Unión: `continuac
 la última fila (folio «X-Y»); `cortado_al_final` sin continuación (siguiente ya hecha) → fila para revisar.
 ① nombre del Excel = «Transcripciones de [fecha] a [fecha]» (Enter salta de fecha; la 1.ª es la fecha de
 contexto), en gris mientras transcribe. ② Proceso (barra por tiempo restante, solo tandas fallidas con
-Reintentar), resumen, revisión por folio (`paginas_revisables`; palabra + `[?]` resaltada en amarillo con `marcar_dudosos`, ✏️ Corregir abre el editor) con corrección guardada por clave de
+Reintentar), resumen, revisión por folio (`paginas_revisables`; palabra + `[?]` en amarillo y `[ilegible]` en rojo claro con `marcar_dudosos`, ✏️ Corregir abre el editor) con corrección guardada por clave de
 fila (`tanda:orden`; `aplicar_correccion` suma continuaciones que lleguen después) y vista previa. Sin
 respuestas crudas en pantalla. Todo en memoria: recargar = perder todo. Excel de 1 hoja: Folio (texto) |
 Fecha (DD/MM/AAAA) | Hora (HH:MM) | Transcripción (ajustar texto). Los 2 documentos, el modelo y el

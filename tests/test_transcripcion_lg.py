@@ -359,7 +359,9 @@ def test_marcar_dudosos():
     assert tl.marcar_dudosos("QUIÉN ACUSÓ [?] Q' NO") == "QUIÉN <mark>ACUSÓ [?]</mark> Q' NO"
     assert tl.marcar_dudosos("[firma: DSSN] 5202 [?]") == "[firma: DSSN] <mark>5202 [?]</mark>"
     assert tl.marcar_dudosos("SE[?]AL") == "<mark>SE[?]</mark>AL"
-    assert tl.marcar_dudosos("[?] al principio\nA < B [ilegible]") == "<mark>[?]</mark> al principio\nA &lt; B [ilegible]"
+    assert tl.marcar_dudosos("[?] al principio\nA < B") == "<mark>[?]</mark> al principio\nA &lt; B"
+    assert tl.marcar_dudosos("PAN BEIRO [ilegible].") == 'PAN BEIRO <mark class="ilegible">[ilegible]</mark>.'
+    assert tl.marcar_dudosos("X [Ilegible] Y [?]") == 'X <mark class="ilegible">[Ilegible]</mark> <mark>Y [?]</mark>'
     assert tl.marcar_dudosos("sin dudas") == "sin dudas"
 
 
