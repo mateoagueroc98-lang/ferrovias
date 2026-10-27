@@ -13,6 +13,9 @@
 # Secretos
 .env
 
+# Saldo estimado de la API (cambia con cada transcripción, es de cada carpeta)
+config/transcripcion_lg/saldo.json
+
 # Python
 __pycache__/
 *.py[cod]

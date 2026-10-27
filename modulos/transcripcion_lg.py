@@ -1,5 +1,6 @@
 """Módulo: Transcripciones del LG (PDF escaneado del Libro de Guardia → Excel, con la API de Claude)."""
 import copy
+import datetime as dt
 import hashlib
 import os
 import threading
@@ -77,7 +78,8 @@ def lanzar(indices: list[int]) -> None:
     s.update(procesando=True, actual=None, faltan=len(indices), inicio_tanda=time.time(), duraciones=[],
              latido=time.time(), aviso="", cancelar=False, esfuerzo=esfuerzo)
     ss[P + "version_vista"] = s["version"]
-    threading.Thread(target=tl.trabajar, args=(s, indices, llamar, system, modelo), daemon=True).start()
+    threading.Thread(target=tl.trabajar, args=(s, indices, llamar, system, modelo),
+                     kwargs={"al_gastar": tl.descontar_saldo}, daemon=True).start()
 
 
 @st.fragment(run_every=2)
@@ -186,6 +188,10 @@ def pantalla_transcribir():
                     f"páginas. Modelo: `{modelo}` · esfuerzo **{tl.ESFUERZOS[esfuerzo].split(' (')[0].lower()}**. "
                     f"Costo estimado: **≈ US\\$ {estimado:.2f}** · tiempo ≈ {max(minutos, 1)} min (a ojo). "
                     "Modelo y esfuerzo se cambian en ⚙️ Configuración.")
+        saldo = tl.saldo_estimado(tl.leer_saldo())
+        if saldo is not None and saldo < estimado:
+            st.warning(f"El saldo estimado de la API (US\\$ {saldo:.2f}) puede no alcanzar para este PDF. "
+                       "Cargá más crédito en la consola de Anthropic y actualizá el saldo en ⚙️ Configuración.")
         with st.expander("Ver las páginas"):
             n = st.number_input("Página", 1, len(imagenes), 1, key=P + "ver_pag")
             st.image(imagenes[n - 1], width=450)
@@ -361,7 +367,7 @@ def pantalla_revisar():
     uso = tl.uso_total(tandas)
     st.header("Resumen")
     st.caption(f"Archivo: {s['nombre']} · {len(s['imagenes'])} páginas · {len(tandas)} tandas")
-    c = st.columns(6)
+    c = st.columns(7)
     c[0].metric("Filas", res["filas"])
     c[1].metric("[?] dudosos", res["dudosos"])
     c[2].metric("[ilegible]", res["ilegibles"])
@@ -370,6 +376,14 @@ def pantalla_revisar():
     c[5].metric("Costo (US$)", f"{uso['costo']:.2f}",
                 help=f"{uso['llamadas']} llamadas · {uso['entrada']:,} tokens de entrada · "
                      f"{uso['salida']:,} de salida (incluye reintentos)".replace(",", "."))
+    datos_saldo = tl.leer_saldo()
+    saldo = tl.saldo_estimado(datos_saldo)
+    if saldo is None:
+        c[6].metric("Saldo API (US$)", "—", help="Cargá el saldo actual en ⚙️ Configuración.")
+    else:
+        c[6].metric("Saldo API (US$)", f"{saldo:.2f}",
+                    help=f"Estimado: el saldo cargado el {fecha_saldo(datos_saldo)} menos lo que gastó esta "
+                         "app desde entonces. El real se ve en la consola de Anthropic.")
 
     seccion_comparar(s, tandas, unidas, filas)
     if not filas:
@@ -410,15 +424,28 @@ LIMITE_TOKENS = {"instrucciones": 2000, "referencia": 6000}
 
 def al_guardar(clave: str) -> None:
     if tl.guardar_documento(clave, ss[f"{P}doc_{clave}"]):
-        ss[P + "msg"] = ("success", f"{NOMBRES[clave]}: guardado. La versión anterior quedó en el historial.")
+        ss[P + "msg"] = ("success", f"{NOMBRES[clave]}: guardado.")
     else:
         ss[P + "msg"] = ("info", f"{NOMBRES[clave]}: no había cambios para guardar.")
 
 
-def al_restaurar(clave: str, texto: str, que: str) -> None:
-    tl.guardar_documento(clave, texto)
+def al_restaurar(clave: str) -> None:
+    tl.guardar_documento(clave, tl.leer_original(clave))
     ss[f"{P}doc_{clave}"] = tl.leer_documento(clave)
-    ss[P + "msg"] = ("success", f"{NOMBRES[clave]}: se restauró {que}. La versión que había quedó en el historial.")
+    ss.pop(f"{P}confirmar_{clave}", None)
+    ss[P + "msg"] = ("success", f"{NOMBRES[clave]}: se restauró el original.")
+
+
+def fecha_saldo(datos: dict) -> str:
+    try:
+        return dt.datetime.fromisoformat(datos["fecha"]).strftime("%d/%m/%Y %H:%M")
+    except ValueError:
+        return datos["fecha"]
+
+
+def al_guardar_saldo() -> None:
+    tl.guardar_saldo(ss[P + "saldo"])
+    ss[P + "msg_saldo"] = f"Saldo guardado: US$ {ss[P + 'saldo']:.2f}. Desde ahora se descuenta lo que gaste la app."
 
 
 def al_descartar(clave: str) -> None:
@@ -492,6 +519,26 @@ def pantalla_configuracion():
                "más, porque ese análisis se cobra como texto de salida. Con «Guardar» queda para las "
                "próximas transcripciones (una que ya está en curso sigue con lo que tenía).")
 
+    st.header("Saldo de la API")
+    datos = tl.leer_saldo()
+    if datos is None:
+        st.markdown("Todavía no cargaste el saldo.")
+    else:
+        st.markdown(f"Saldo estimado: **US\\$ {tl.saldo_estimado(datos):.2f}** · cargado US\\$ "
+                    f"{datos['cargado']:.2f} el {fecha_saldo(datos)} · gastado desde entonces US\\$ "
+                    f"{datos['gastado']:.2f}.")
+    c1, c2 = st.columns([1, 1], vertical_alignment="bottom")
+    c1.number_input("Saldo actual (US$)", min_value=0.0, step=1.0, format="%.2f", key=P + "saldo",
+                    value=round(tl.saldo_estimado(datos), 2) if datos else 0.0)
+    c2.button("💾 Guardar saldo", key=P + "guardar_saldo", type="primary", on_click=al_guardar_saldo)
+    if msg := ss.pop(P + "msg_saldo", None):
+        st.success(msg)
+    st.caption("La API no deja consultar el saldo: copiá el que figura en la consola de Anthropic "
+               "(platform.claude.com → Billing) y guardalo acá. A partir de ahí la app le va restando lo que "
+               "cuesta cada transcripción. Solo cuenta lo que gasta esta app (si usás la misma clave en otro "
+               "lado, no se entera): cada tanto volvé a copiar el saldo real. Queda guardado en esta carpeta "
+               "(no va a GitHub): en el trabajo lo comparten las dos compus.")
+
     st.header("Conexión con Claude")
     clave = os.getenv("ANTHROPIC_API_KEY", "").strip()
     if clave:
@@ -525,23 +572,19 @@ def pantalla_configuracion():
                     on_click=al_guardar, args=(clave,))
         b[1].button("↩️ Descartar cambios", key=f"{P}descartar_{clave}", width="stretch",
                     on_click=al_descartar, args=(clave,), disabled=not sin_guardar)
-        original = tl.leer_original(clave)
-        b[2].button("⏮️ Restaurar original", key=f"{P}original_{clave}", width="stretch",
-                    on_click=al_restaurar, args=(clave, original, "el original"),
-                    disabled=guardado == original and not sin_guardar)
-        versiones = tl.historial(clave)
-        with st.expander(f"Historial ({len(versiones)} versiones anteriores)"):
-            if not versiones:
-                st.caption("Todavía no hay versiones anteriores: aparecen al guardar.")
-            else:
-                elegida = st.selectbox(
-                    "Versión", range(len(versiones)), key=f"{P}hist_{clave}",
-                    format_func=lambda k: f"Reemplazada el {versiones[k][0]:%d/%m/%Y %H:%M:%S} "
-                                          f"(≈ {tl.tokens_aprox(versiones[k][1].read_text(encoding='utf-8')):,} tokens)".replace(",", "."))
-                anterior = versiones[elegida][1].read_text(encoding="utf-8")
-                st.code(anterior, language="markdown", wrap_lines=True, height=300)
-                st.button("Restaurar esta versión", key=f"{P}rest_{clave}", on_click=al_restaurar,
-                          args=(clave, anterior, f"la versión del {versiones[elegida][0]:%d/%m/%Y %H:%M}"))
+        if b[2].button("⏮️ Restaurar original", key=f"{P}original_{clave}", width="stretch",
+                       disabled=guardado == tl.leer_original(clave) and not sin_guardar):
+            ss[f"{P}confirmar_{clave}"] = True
+        if ss.get(f"{P}confirmar_{clave}"):
+            with st.container(border=True):
+                st.warning("Se vuelve al documento original y **se pierde la versión actual** (no hay "
+                           "historial). ¿Seguro?")
+                c1, c2 = st.columns(2)
+                c1.button("Sí, restaurar el original", key=f"{P}si_{clave}", type="primary",
+                          width="stretch", on_click=al_restaurar, args=(clave,))
+                if c2.button("Cancelar", key=f"{P}no_{clave}", width="stretch"):
+                    ss.pop(f"{P}confirmar_{clave}")
+                    st.rerun()
 
 
 if seccion == SECCIONES[0]:

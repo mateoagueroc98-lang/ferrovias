@@ -458,20 +458,45 @@ def test_guardar_y_restaurar_documento(carpeta):
     assert original == tl.leer_original("referencia", carpeta)
     assert not tl.guardar_documento("referencia", original, carpeta)  # sin cambios
 
-    t1 = dt.datetime(2026, 10, 26, 10, 0, 0)
-    assert tl.guardar_documento("referencia", "versión 2\r\nnueva", carpeta, ahora=t1)
+    assert tl.guardar_documento("referencia", "versión 2\r\nnueva", carpeta)
     assert tl.leer_documento("referencia", carpeta) == "versión 2\nnueva"
-    assert tl.guardar_documento("referencia", "versión 3", carpeta, ahora=t1)  # mismo segundo
-
-    versiones = tl.historial("referencia", carpeta)
-    assert len(versiones) == 2 and all(f == t1 for f, _ in versiones)
-    assert {v.read_text(encoding="utf-8") for _, v in versiones} == {original, "versión 2\nnueva"}
-    assert tl.historial("instrucciones", carpeta) == []
+    assert tl.guardar_documento("referencia", "versión 3", carpeta)
+    assert tl.leer_documento("referencia", carpeta) == "versión 3"
+    assert not (carpeta / "historial").exists()  # sin historial de versiones
 
     tl.guardar_documento("referencia", tl.leer_original("referencia", carpeta), carpeta)  # restaurar
     assert tl.leer_documento("referencia", carpeta) == original
-    assert len(tl.historial("referencia", carpeta)) == 3
     assert tl.leer_original("referencia", carpeta) == original  # el original nunca se toca
+
+
+def test_saldo(carpeta):
+    assert tl.leer_saldo(carpeta) is None and tl.saldo_estimado(None) is None
+    tl.descontar_saldo(1.0, carpeta)  # sin saldo cargado no hace nada
+    assert tl.leer_saldo(carpeta) is None
+
+    tl.guardar_saldo(5, carpeta, ahora=dt.datetime(2026, 10, 27, 15, 30))
+    tl.descontar_saldo(0.32, carpeta)
+    tl.descontar_saldo(0.18, carpeta)
+    datos = tl.leer_saldo(carpeta)
+    assert datos == {"cargado": 5.0, "fecha": "2026-10-27T15:30", "gastado": 0.5}
+    assert tl.saldo_estimado(datos) == pytest.approx(4.5)
+
+    tl.guardar_saldo(10.25, carpeta)  # nueva carga: lo gastado vuelve a cero
+    assert tl.saldo_estimado(tl.leer_saldo(carpeta)) == pytest.approx(10.25)
+
+    (carpeta / tl.ARCHIVO_SALDO).write_text("roto", encoding="utf-8")
+    assert tl.leer_saldo(carpeta) is None
+
+
+def test_trabajar_descuenta_lo_gastado():
+    estado = estado_para(6)
+    gastos = []
+    uso = [{"modelo": "claude-opus-5-5", "entrada": 1_000_000, "salida": 0, "cache_escritura": 0,
+            "cache_lectura": 0}]
+    respuestas = iter([("roto", uso), (respuesta([fila()]), uso), (respuesta([fila()]), uso)])
+    tl.trabajar(estado, [0, 1], lambda s, c: next(respuestas), [], "claude-opus-5-5", reloj=lambda: 10.0,
+                al_gastar=gastos.append)
+    assert gastos == [pytest.approx(8.0), pytest.approx(4.0)]  # la 1.ª tanda tuvo 2 intentos
 
 
 def test_ajustes(carpeta):

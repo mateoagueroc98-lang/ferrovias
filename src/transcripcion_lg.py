@@ -6,7 +6,8 @@ modelo puede seguir un párrafo que pasa de una página a otra. El modelo respon
 definido en el documento de instrucciones), que acá se valida y se une tanda tras tanda.
 
 Los dos documentos de configuración (instrucciones y referencia) se guardan en
-config/transcripcion_lg/, que SÍ va a git, con historial de versiones y los originales aparte.
+config/transcripcion_lg/, que SÍ va a git, con los originales aparte. El saldo estimado de la API
+va en un archivo local de esa carpeta que NO va a git (cambia con cada transcripción).
 """
 import base64
 import datetime as dt
@@ -32,7 +33,7 @@ DOCUMENTOS = {
     "instrucciones": "PROMPT_Sistema_Transcripcion_LG.md",
     "referencia": "REFERENCIA_Transcripcion_LG.md",
 }
-FORMATO_FECHA_HISTORIAL = "%Y-%m-%d_%H-%M-%S"
+ARCHIVO_SALDO = "saldo.json"  # en .gitignore
 
 # Precios en US$ por millón de tokens: entrada, salida, escritura de caché (5 min), lectura de caché.
 PRECIOS = {
@@ -85,36 +86,13 @@ def _limpiar(texto: str) -> str:
     return texto.replace("\r\n", "\n").replace("\r", "\n")
 
 
-def guardar_documento(clave: str, texto: str, carpeta: Path = CARPETA_CONFIG,
-                      ahora: dt.datetime | None = None) -> bool:
-    """Guarda la nueva versión y pasa la anterior al historial. Devuelve False si no cambió nada."""
+def guardar_documento(clave: str, texto: str, carpeta: Path = CARPETA_CONFIG) -> bool:
+    """Guarda la nueva versión (reemplaza a la anterior). Devuelve False si no cambió nada."""
     texto = _limpiar(texto)
-    anterior = leer_documento(clave, carpeta)
-    if texto == anterior:
+    if texto == leer_documento(clave, carpeta):
         return False
-    ahora = ahora or dt.datetime.now()
-    historial = carpeta / "historial"
-    historial.mkdir(parents=True, exist_ok=True)
-    destino = historial / f"{ahora.strftime(FORMATO_FECHA_HISTORIAL)}_{DOCUMENTOS[clave]}"
-    n = 2
-    while destino.exists():  # dos guardados en el mismo segundo
-        destino = historial / f"{ahora.strftime(FORMATO_FECHA_HISTORIAL)}-{n}_{DOCUMENTOS[clave]}"
-        n += 1
-    destino.write_text(anterior, encoding="utf-8", newline="\n")
     _ruta(clave, carpeta).write_text(texto, encoding="utf-8", newline="\n")
     return True
-
-
-def historial(clave: str, carpeta: Path = CARPETA_CONFIG) -> list[tuple[dt.datetime, Path]]:
-    """Versiones anteriores del documento, de la más nueva a la más vieja."""
-    versiones = []
-    for ruta in (carpeta / "historial").glob(f"*_{DOCUMENTOS[clave]}"):
-        try:
-            fecha = dt.datetime.strptime(ruta.name[:19], FORMATO_FECHA_HISTORIAL)
-        except ValueError:
-            continue
-        versiones.append((fecha, ruta))
-    return sorted(versiones, key=lambda v: (v[0], v[1].name), reverse=True)
 
 
 def leer_ajustes(carpeta: Path = CARPETA_CONFIG) -> dict:
@@ -130,6 +108,42 @@ def leer_ajustes(carpeta: Path = CARPETA_CONFIG) -> dict:
     if ajustes["esfuerzo"] not in ESFUERZOS:
         ajustes["esfuerzo"] = ESFUERZO_DEFECTO
     return ajustes
+
+
+def leer_saldo(carpeta: Path = CARPETA_CONFIG) -> dict | None:
+    """Última carga de saldo: {"cargado": US$, "fecha": "AAAA-MM-DDTHH:MM", "gastado": US$}. None si no hay."""
+    ruta = carpeta / ARCHIVO_SALDO
+    try:
+        datos = json.loads(ruta.read_text(encoding="utf-8"))
+        return {"cargado": float(datos["cargado"]), "fecha": str(datos["fecha"]),
+                "gastado": float(datos.get("gastado", 0))}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _escribir_saldo(datos: dict, carpeta: Path) -> None:
+    carpeta.mkdir(parents=True, exist_ok=True)
+    (carpeta / ARCHIVO_SALDO).write_text(json.dumps(datos, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
+def guardar_saldo(monto: float, carpeta: Path = CARPETA_CONFIG, ahora: dt.datetime | None = None) -> None:
+    """Nueva carga de saldo (el que muestra la consola de Anthropic): lo gastado vuelve a cero."""
+    ahora = ahora or dt.datetime.now()
+    _escribir_saldo({"cargado": round(float(monto), 4), "fecha": ahora.strftime("%Y-%m-%dT%H:%M"),
+                     "gastado": 0.0}, carpeta)
+
+
+def descontar_saldo(costo_usd: float, carpeta: Path = CARPETA_CONFIG) -> None:
+    """Suma un gasto al saldo cargado (si no hay saldo cargado, no hace nada)."""
+    datos = leer_saldo(carpeta)
+    if datos is None or costo_usd <= 0:
+        return
+    datos["gastado"] = round(datos["gastado"] + costo_usd, 6)
+    _escribir_saldo(datos, carpeta)
+
+
+def saldo_estimado(datos: dict | None) -> float | None:
+    return None if datos is None else datos["cargado"] - datos["gastado"]
 
 
 def guardar_ajustes(ajustes: dict, carpeta: Path = CARPETA_CONFIG) -> None:
@@ -623,12 +637,14 @@ def tiempo_restante(duraciones: list[float], faltan: int, en_curso: float, por_d
     return faltan * promedio + max(promedio - en_curso, 0)
 
 
-def trabajar(estado: dict, indices: list[int], llamar, system: list[dict], modelo: str, reloj=time.time):
+def trabajar(estado: dict, indices: list[int], llamar, system: list[dict], modelo: str, reloj=time.time,
+             al_gastar=None):
     """Procesa las tandas de `indices` de a una, en orden. Corre en un hilo aparte: no toca Streamlit.
 
     `estado` es la sesión de transcripción (tandas, imágenes, fecha de contexto...). La pantalla
     actualiza estado["latido"] cada pocos segundos; si deja de hacerlo, se frena antes de la
-    siguiente tanda para no gastar crédito en vano.
+    siguiente tanda para no gastar crédito en vano. `al_gastar(costo_usd)` se llama después de
+    cada tanda con lo que costó (para descontarlo del saldo).
     """
     import anthropic
 
@@ -641,6 +657,7 @@ def trabajar(estado: dict, indices: list[int], llamar, system: list[dict], model
             contexto = contexto_para(tandas, i, estado["fecha_contexto"])
             contenido = mensaje_usuario([estado["imagenes"][p] for p in t.paginas], t.paginas, contexto)
             estado["actual"], estado["faltan"], estado["inicio_tanda"] = i, len(indices) - k - 1, reloj()
+            intentos_antes = len(t.intentos)
             try:
                 procesar_tanda(t, llamar, system, contenido, contexto)
             except anthropic.APIError as e:
@@ -654,6 +671,11 @@ def trabajar(estado: dict, indices: list[int], llamar, system: list[dict], model
                 t.estado, t.error = "error", f"Error inesperado: {e}"
             finally:
                 estado["duraciones"].append(reloj() - estado["inicio_tanda"])
+                if al_gastar is not None:
+                    try:
+                        al_gastar(costo([u for x in t.intentos[intentos_antes:] for u in x["uso"]]))
+                    except Exception:  # que un problema con el archivo del saldo no frene la transcripción
+                        pass
                 estado["version"] += 1
     finally:
         estado["actual"] = None

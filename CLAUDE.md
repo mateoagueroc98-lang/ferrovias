@@ -70,8 +70,9 @@ fila (`tanda:orden`; `aplicar_correccion` suma continuaciones que lleguen despu�
 respuestas crudas en pantalla. Todo en memoria: recargar = perder todo. Excel de 1 hoja: Folio (texto) |
 Fecha (DD/MM/AAAA) | Hora (HH:MM) | Transcripción (ajustar texto). Los 2 documentos, el modelo y el
 esfuerzo (`low`/`medium`/`high`/`xhigh`, por defecto `high`; botón Guardar) se editan en ⚙️ Configuración
-y se guardan en `config/transcripcion_lg/` (SÍ va a git; con `historial/` y `originales/`); la app nunca
-los modifica sola. PDF inventado en `tests/ejemplos/LG_ejemplo.pdf`.
+y se guardan en `config/transcripcion_lg/` (SÍ va a git; con `originales/`, SIN historial de versiones); la app nunca
+los modifica sola. Saldo de la API cargado a mano en ⚙️ y descontado por tanda (`saldo.json`, NO va a
+git; la API no permite consultarlo). PDF inventado en `tests/ejemplos/LG_ejemplo.pdf`.
 
 **Concatenación**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por
 número de novedad (Nro, Fecha, Hora inicio, Hora fin, Detalle). Hora fin = hora del último renglón cuyo

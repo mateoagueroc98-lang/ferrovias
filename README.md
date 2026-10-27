@@ -227,6 +227,12 @@ tanda, se pierden las correcciones de esa tanda (las demás quedan).
 - **Esfuerzo**: cuánto analiza Claude cada página antes de responder: bajo, medio, **alto** (por
   defecto) o muy alto. Más esfuerzo = lee la letra con más cuidado, pero tarda y cuesta más (ese
   análisis se cobra como salida). Se ve en ① Transcribir.
+- **Saldo de la API**: la API no deja consultar el saldo, así que se carga a mano el que muestra la
+  consola de Anthropic (platform.claude.com → Billing) y **💾 Guardar saldo**. Desde esa carga, la app
+  le va restando lo que cuesta cada tanda (incluidos los reintentos) y muestra el **saldo estimado**
+  acá y en el Resumen de ②; en ① avisa si no alcanza para el PDF. Solo cuenta lo que gasta esta app:
+  cada tanto conviene volver a copiar el saldo real. Se guarda en `config/transcripcion_lg/saldo.json`,
+  que **no va a git** (en el trabajo lo comparten las dos compus; la Mac tiene el suyo).
 - **Conexión con Claude**: muestra si la app encontró la clave en el `.env` y el botón **🔌 Probar la
   conexión con Claude**, que comprueba la clave, que la red deje llegar a `api.anthropic.com` y que el
   modelo esté disponible, sin gastar crédito. Si en plena transcripción falla la clave, la conexión o
@@ -236,11 +242,11 @@ tanda, se pierden las correcciones de esa tanda (las demás quedan).
   escritor, pasos a nivel). Se editan en pantalla y se **💾 Guardan**. Al lado se ve cuántos tokens
   tiene cada uno, con aviso si crece mucho (cada tanda lo manda entero; desde la 2.ª tanda sale más
   barato por la caché).
-- Al guardar, la versión anterior va al **historial** (con fecha y hora): se puede ver y restaurar.
-  **⏮️ Restaurar original** vuelve a la versión inicial (y lo que había también queda en el historial).
+- **No hay historial de versiones**: al guardar, la versión nueva reemplaza a la anterior.
+  **⏮️ Restaurar original** vuelve a la versión inicial (pide confirmación: lo que había se pierde).
 - La app **nunca** cambia estos documentos sola.
-- Todo se guarda en `config/transcripcion_lg/` (`originales/` no se toca nunca, `historial/`, los
-  documentos vigentes y `ajustes.json` con el modelo y el esfuerzo). **Esa carpeta va a git**: para llevar los
+- Todo se guarda en `config/transcripcion_lg/` (`originales/` no se toca nunca, los documentos
+  vigentes y `ajustes.json` con el modelo y el esfuerzo). **Esa carpeta va a git**: para llevar los
   cambios a la otra compu hay que subirlos a GitHub (ver la guía).
 
 **Costo aproximado** (a ojo): con Opus 5.5 y esfuerzo alto, unos US$ 0,08 por página (un PDF de 11
