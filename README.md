@@ -72,6 +72,13 @@ corresponden, día por día. La app propone candidatos y vos elegís. Todo corre
      distintas, gana la naranja. Las novedades ya resueltas (en gris) muestran solo ! y !!.
    - Los botones de acción (Elegir avisos del LG / Asociar, Descartar, Todas, Volver) quedan **fijos abajo
      de la pantalla** mientras hacés scroll.
+   - **📅 Unir con otro día** (pasos ① y ②): para el mismo evento cargado en PCZ en días distintos. Abre
+     una ventana donde buscás novedades de otros días (filtro por día opcional y palabras), tildás una o
+     varias y tocás **OK**; en la misma ventana elegís la **Fecha** que va al Excel (una sola) y el
+     **N° Novedad** (uno de ellos o todos juntos «1001 | 1025»), y si las novedades traen valores
+     distintos de **Comienzo de falla** o **Habilitación**, cuál o cuáles van (si son varios, juntos con « | »). Al confirmar pasás al paso ② con todo el
+     grupo, y los avisos del LG que se proponen son de todos esos días. «Volver a las novedades» deshace
+     la unión.
    - Atajos: **1–9** tildar novedad (paso ①) o aviso (paso ②) · **Enter** pasar al paso ② / asociar ·
      **D** descartar · **← →** día anterior/siguiente.
    - "Ver también día anterior / siguiente" (apagado por defecto) agrega esos avisos marcados como

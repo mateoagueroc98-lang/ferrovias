@@ -43,6 +43,9 @@ transcripción) para asociarlas, o se descartan. Lo resuelto queda en gris hasta
 Cada novedad tiene a la izquierda 🗑️ (descartar solo esa) y ! / !! (marca amarilla / naranja: resalta su
 fila en el Excel final; las novedades unidas —tildadas juntas o asociadas— comparten la marca, y al
 asociar con marcas distintas gana la naranja).
+«📅 Unir con otro día» (st.dialog): suma novedades de PCZ de otros días al grupo, con Fecha y N° Novedad
+elegidos para el Excel (`fecha`/`numero` en la asociación, y `extras` con los valores elegidos de
+Comienzo de falla / Habilitación: `ELEGIBLES_UNION`); el paso ② propone avisos de todos esos días.
 Candidatos solo de la MISMA fecha (fechas día primero, nunca MM/DD), ordenados por similitud simple
 sin IA. El progreso vive solo en memoria (no hay sesiones guardadas en disco). Export con hojas
 Asociaciones (TODAS las novedades de PCZ ordenadas por día: una fila por asociación y una por novedad sin

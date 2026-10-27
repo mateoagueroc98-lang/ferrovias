@@ -385,19 +385,21 @@ def tabla_avisos(lg: pd.DataFrame) -> pd.DataFrame:
     return t
 
 
-def filtrar_por_fecha(tabla: pd.DataFrame, fecha: dt.date | None, vecinos: bool = False) -> pd.DataFrame:
+def filtrar_por_fecha(tabla: pd.DataFrame, fecha, vecinos: bool = False) -> pd.DataFrame:
     """Filas con la MISMA fecha (y, si vecinos=True, del día anterior/siguiente).
 
+    `fecha` puede ser una fecha o varias (novedades unidas de distintos días).
     Agrega la columna "otro_dia" (True para las del día anterior/siguiente).
     Sin fecha válida no hay candidatos por fecha.
     """
-    if fecha is None:
+    base = {f for f in (fecha if isinstance(fecha, (list, tuple, set)) else [fecha]) if f is not None}
+    if not base:
         return tabla.iloc[0:0].assign(otro_dia=pd.Series(dtype=bool))
-    dias = {fecha}
+    dias = set(base)
     if vecinos:
-        dias |= {fecha - dt.timedelta(days=1), fecha + dt.timedelta(days=1)}
+        dias |= {f + dt.timedelta(days=d) for f in base for d in (-1, 1)}
     sel = tabla[tabla["fecha"].isin(dias)].copy()
-    sel["otro_dia"] = sel["fecha"] != fecha
+    sel["otro_dia"] = ~sel["fecha"].isin(base)
     return sel
 
 
@@ -411,7 +413,8 @@ def novedad_combinada(pcz: pd.DataFrame, posiciones: list[int]) -> pd.Series:
     """Varias novedades de PCZ unidas en una sola (para buscar sus avisos del LG juntos)."""
     sel = pcz.iloc[list(posiciones)]
     fechas = [f for f in sel["fecha"] if f is not None and not pd.isna(f)]
-    return pd.Series({"fecha": fechas[0] if fechas else None, "descripcion": " ".join(sel["descripcion"]),
+    return pd.Series({"fecha": fechas[0] if fechas else None, "fechas": sorted(set(fechas)),
+                      "descripcion": " ".join(sel["descripcion"]),
                       "hora": [h for h in sel["hora"] if h is not None and not pd.isna(h)]})
 
 
@@ -431,8 +434,9 @@ def puntuar(novedad: pd.Series, sel: pd.DataFrame) -> pd.DataFrame:
 
 
 def candidatos(novedad: pd.Series, avisos_lg: pd.DataFrame, vecinos: bool = False) -> pd.DataFrame:
-    """Avisos del LG candidatos: primero los de la misma fecha, de mayor a menor puntaje."""
-    return puntuar(novedad, filtrar_por_fecha(avisos_lg, novedad["fecha"], vecinos))
+    """Avisos del LG candidatos: primero los de la misma fecha (o fechas, si se unieron novedades de
+    distintos días), de mayor a menor puntaje."""
+    return puntuar(novedad, filtrar_por_fecha(avisos_lg, novedad.get("fechas") or novedad["fecha"], vecinos))
 
 
 def avisos_sin_fecha(novedad: pd.Series, avisos_lg: pd.DataFrame) -> pd.DataFrame:
@@ -452,6 +456,59 @@ def buscar(cands: pd.DataFrame, texto: str) -> pd.DataFrame:
         return cands
     base = cands["texto"].map(sin_tildes)
     return cands[base.map(lambda b: all(p in b for p in palabras))]
+
+
+# ------------------------------------------- unir novedades de distintos días
+_SIN_EXCLUIR = object()
+
+
+def novedades_para_unir(pcz: pd.DataFrame, trabajo: dict, elegidas: list[int], excluir_dia=_SIN_EXCLUIR,
+                        dia=None, texto: str = "") -> pd.DataFrame:
+    """Novedades de PCZ que se pueden unir a las `elegidas` (de otro día y todavía sin asociar),
+    filtradas por día y por palabras (opcionales), ordenadas por parecido con las elegidas.
+    excluir_dia: el día que se está recorriendo (None = el grupo de fechas no reconocidas)."""
+    asociadas = asociacion_de(trabajo)
+    t = pcz.assign(pos=range(len(pcz)))
+    t = t[~t["pos"].isin(elegidas) & ~t["pos"].isin(asociadas)]
+    if excluir_dia is None:
+        t = t[t["fecha"].notna()]
+    elif excluir_dia is not _SIN_EXCLUIR:
+        t = t[t["fecha"] != excluir_dia]
+    if dia is not None:
+        t = t[t["fecha"] == dia]
+    if palabras := sin_tildes(texto).split():
+        t = t[t["descripcion"].map(sin_tildes).map(lambda d: all(p in d for p in palabras))]
+    base = novedad_combinada(pcz, elegidas)
+    t = t.copy()
+    t["puntaje"] = [similitud(d, _horas(h), base["descripcion"], _horas(base["hora"]))["puntaje"]
+                    for d, h in zip(t["descripcion"], t["hora"])]
+    t["_sin_fecha"] = t["fecha"].isna()
+    return t.sort_values(["puntaje", "_sin_fecha", "pos"], ascending=[False, True, True]).drop(columns="_sin_fecha")
+
+
+# Columnas de PCZ en las que, al unir novedades de distintos días, se elige qué valor(es) van al Excel
+ELEGIBLES_UNION = ("Comienzo de falla", "Habilitación")
+
+
+def valores_union(pcz: pd.DataFrame, posiciones: list[int], nombre: str) -> list[tuple]:
+    """Valores distintos (no vacíos) de una columna de PCZ entre novedades unidas, por fecha:
+    [(valor, [N° de las novedades que lo tienen])]."""
+    salida: dict[str, tuple] = {}
+    for k in sorted(posiciones, key=lambda k: (pcz.loc[k, "fecha"] is None, pcz.loc[k, "fecha"] or dt.date.min, k)):
+        v = pcz.loc[k, nombre]
+        if texto := _texto_celda(v):
+            salida.setdefault(texto, (v, []))[1].append(pcz.loc[k, "id"])
+    return list(salida.values())
+
+
+def opciones_union(pcz: pd.DataFrame, posiciones: list[int]) -> tuple[list, list[str]]:
+    """Para novedades unidas: fechas distintas (para elegir una) y opciones de N° Novedad (cada uno
+    solo, o todos juntos con « | »)."""
+    # Por fecha (las sin fecha al final) y, dentro del día, en el orden del PCZ
+    novs = sorted(posiciones, key=lambda k: (pcz.loc[k, "fecha"] is None, pcz.loc[k, "fecha"] or dt.date.min, k))
+    fechas = sorted({pcz.loc[k, "fecha"] for k in novs if pcz.loc[k, "fecha"] is not None})
+    ids = list(dict.fromkeys(pcz.loc[k, "id"] for k in novs))
+    return fechas, ids + ([" | ".join(ids)] if len(ids) > 1 else [])
 
 
 # ----------------------------------------------- estado del trabajo (en memoria)
@@ -486,8 +543,19 @@ def trabajo_nuevo(huella_archivos: str) -> dict:
     return {"huella": huella_archivos, "dia": 0, "asociaciones": [], "descartadas": [], "marcas": {}}
 
 
-def asociar(trabajo: dict, novedades, avisos_lg) -> None:
-    trabajo["asociaciones"].append({"novedades": sorted(set(novedades)), "avisos": list(dict.fromkeys(avisos_lg))})
+def asociar(trabajo: dict, novedades, avisos_lg, fecha=None, numero: str | None = None,
+            extras: dict | None = None) -> None:
+    """fecha / numero / extras: lo elegido para el Excel cuando se unen novedades de distintos días
+    (si no se dan, se usan la fecha de la primera novedad, todos los N° juntos y todos los valores).
+    extras: {columna de EXTRAS_PCZ: [valores elegidos]} (p. ej. qué «Comienzo de falla» va)."""
+    g = {"novedades": sorted(set(novedades)), "avisos": list(dict.fromkeys(avisos_lg))}
+    if fecha is not None:
+        g["fecha"] = fecha
+    if numero:
+        g["numero"] = numero
+    if extras:
+        g["extras"] = extras
+    trabajo["asociaciones"].append(g)
     trabajo["descartadas"] = [k for k in trabajo["descartadas"] if k not in set(novedades)]
     unificar_marcas(trabajo, novedades)
 
@@ -631,7 +699,8 @@ def _en_orden(pcz: pd.DataFrame, trabajo: dict) -> list[dict]:
                                               for k in range(len(pcz)) if k not in asociadas]
 
     def orden(g):
-        fechas = [pcz.loc[k, "fecha"] for k in g["novedades"] if pcz.loc[k, "fecha"] is not None]
+        fechas = [g["fecha"]] if g.get("fecha") else \
+            [pcz.loc[k, "fecha"] for k in g["novedades"] if pcz.loc[k, "fecha"] is not None]
         return (not fechas, min(fechas) if fechas else dt.date.min, min(g["novedades"]), g["novedades"])
     return sorted(grupos, key=orden)
 
@@ -651,8 +720,9 @@ def tabla_asociaciones(lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, numer
         ids = [pcz.loc[k, "id"] for k in novs]
         fila = dict.fromkeys(COLUMNAS_SALIDA, None)
         fila["N°"] = numero_inicial + n
-        fila["Fecha"] = fechas[0] if fechas else _juntar(pcz.loc[k, "fecha_original"] for k in novs)
-        fila["N° Novedad"] = (int(ids[0]) if ids[0].isdigit() else ids[0]) if len(ids) == 1 else " | ".join(ids)
+        fila["Fecha"] = g.get("fecha") or (fechas[0] if fechas else _juntar(pcz.loc[k, "fecha_original"] for k in novs))
+        numero = g.get("numero") or " | ".join(ids)
+        fila["N° Novedad"] = int(numero) if numero.isdigit() else numero
         fila["Descripción"] = texto_descripcion([pcz.loc[k, "descripcion"] for k in novs],
                                                 [lg.loc[i, "avisos"][j] for i, j in claves])
         paginas = list(dict.fromkeys(p for p in (lg.loc[i, "pagina"] for i, _ in claves) if p))
@@ -661,7 +731,8 @@ def tabla_asociaciones(lg: pd.DataFrame, pcz: pd.DataFrame, trabajo: dict, numer
         elif paginas:
             fila["Página"] = " | ".join(paginas)
         for nombre in EXTRAS_PCZ:
-            valores = [v for v in (pcz.loc[k, nombre] for k in novs) if _texto_celda(v)]
+            valores = g["extras"][nombre] if nombre in g.get("extras", {}) else \
+                [v for v in (pcz.loc[k, nombre] for k in novs) if _texto_celda(v)]
             fila[nombre] = (_sin_hora(valores[0]) if len({_texto_celda(v) for v in valores}) == 1
                             else _juntar(valores) or None)
         filas.append(fila)
