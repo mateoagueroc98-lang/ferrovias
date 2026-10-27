@@ -148,6 +148,11 @@ def test_union_cortado_sin_continuacion_se_marca():
     assert filas[1].revisar == []
 
 
+def test_union_cortado_con_la_siguiente_todavia_en_proceso():
+    t1 = tanda_ok([0], respuesta([fila(texto="A cortado")], cortado=True))
+    assert tl.unir_tandas([t1, tl.Tanda([1])])[0].revisar == []
+
+
 def test_union_cortado_al_final_del_pdf():
     filas = tl.unir_tandas([tanda_ok([0], respuesta([fila()], cortado=True))])
     assert filas[0].revisar == ["quedó cortado al final del PDF"]
@@ -200,7 +205,8 @@ def test_procesar_tanda_reintenta_una_vez():
 
 def test_procesar_tanda_falla_dos_veces():
     t = tl.procesar_tanda(tl.Tanda([0]), lambda s, c: ("nada", []), [], [], {})
-    assert t.estado == "error" and len(t.intentos) == 2 and "JSON" in t.error
+    assert t.estado == "error" and len(t.intentos) == 2 and "no se pudo leer" in t.error
+    assert "JSON" in t.intentos[-1]["error"]  # el detalle técnico queda guardado
 
 
 def test_procesar_tanda_negativa_del_modelo():
@@ -301,10 +307,130 @@ def test_exportar_excel_formato():
     assert ws["B4"].value == "fecha rara" and ws["C4"].value == "25:00"  # texto, para corregir
 
 
-def test_nombre_archivo():
+def test_nombre_excel():
+    d = dt.date
+    assert tl.nombre_excel(d(2026, 10, 1), d(2026, 10, 6)) == "Transcripciones de 01-10-2026 a 06-10-2026.xlsx"
     filas = [{"Fecha": "05/10/2026"}, {"Fecha": ""}, {"Fecha": "7/10/2026"}]
-    assert tl.nombre_archivo(filas) == "LG_transcripcion_05-10-2026_07-10-2026.xlsx"
-    assert tl.nombre_archivo([{"Fecha": ""}]) == "LG_transcripcion.xlsx"
+    # Las fechas que no se eligieron salen de la primera y la última fila.
+    assert tl.nombre_excel(None, None, filas) == "Transcripciones de 05-10-2026 a 07-10-2026.xlsx"
+    assert tl.nombre_excel(d(2026, 10, 1), None, filas) == "Transcripciones de 01-10-2026 a 07-10-2026.xlsx"
+    assert tl.nombre_excel(None, None, [{"Fecha": ""}]) == "Transcripciones LG.xlsx"
+    assert tl.nombre_excel(None, d(2026, 10, 6)) == "Transcripciones de … a 06-10-2026.xlsx"
+
+
+# --------------------------------------------------------- revisión por folio
+def test_paginas_revisables_por_folio():
+    t1 = tanda_ok([0, 1, 2], respuesta([fila("folio 21", "01/10/2026", texto="A"),
+                                         fila("folio 22-23", "01/10/2026", texto="B"),
+                                         fila("folio 23", "02/10/2026", texto="C")], cortado=True))
+    # La tanda 2 empieza con la continuación de C: su 1.ª página (folio 24) no tiene párrafo nuevo.
+    t2 = tanda_ok([3, 4, 5], respuesta([fila("folio 25", "02/10/2026", texto="D"),
+                                         fila("folio 26", "03/10/2026", texto="E")], continuacion="fin de C"))
+    t3 = tl.Tanda([6])  # todavía no llegó
+    filas = tl.unir_tandas([t1, t2, t3])
+    assert [f.folio for f in filas] == ["folio 21", "folio 22-23", "folio 23-25", "folio 25", "folio 26"]
+    paginas = tl.paginas_revisables([t1, t2, t3], filas)
+    assert [(p["pagina"], p["folio"]) for p in paginas] == [(0, 21), (1, 22), (2, 23), (3, 24), (4, 25), (5, 26)]
+    por_folio = {p["folio"]: p for p in paginas}
+    assert por_folio[21]["filas"] == [0] and por_folio[21]["fechas"] == ["01/10/2026"]
+    assert por_folio[23]["filas"] == [1, 2] and por_folio[23]["fechas"] == ["01/10/2026", "02/10/2026"]
+    assert por_folio[24]["filas"] == [2]          # la continuación de C
+    assert por_folio[25]["filas"] == [2, 3]
+
+
+def test_paginas_revisables_tanda_que_es_solo_continuacion():
+    t1 = tanda_ok([0, 1, 2], respuesta([fila("folio 32", texto="A"), fila("folio 33-34", texto="B")],
+                                        cortado=True))
+    t2 = tanda_ok([3], respuesta([], continuacion="fin de B"))
+    filas = tl.unir_tandas([t1, t2])
+    assert filas[-1].folio == "folio 33-35"
+    ultima = tl.paginas_revisables([t1, t2], filas)[-1]
+    assert (ultima["pagina"], ultima["folio"], ultima["filas"]) == (3, 35, [1])
+
+
+def test_paginas_revisables_sin_folio_legible():
+    t = tanda_ok([0, 1], respuesta([fila("folio [ilegible]", texto="A"), fila("folio [ilegible]", texto="B")]))
+    paginas = tl.paginas_revisables([t], tl.unir_tandas([t]))
+    assert [(p["folio"], p["filas"]) for p in paginas] == [(None, [0, 1]), (None, [])]
+
+
+def test_aplicar_correccion():
+    corr = {"texto": "A corregido", "base": "A origna"}
+    assert tl.aplicar_correccion("A origna", None) == "A origna"
+    assert tl.aplicar_correccion("A origna", corr) == "A corregido"
+    # Después llegó la continuación: se suma al final de lo corregido.
+    assert tl.aplicar_correccion("A origna y sigue", corr) == "A corregido y sigue"
+
+
+def test_fila_clave_estable():
+    t1 = tanda_ok([0], respuesta([fila(texto="A"), fila(texto="B")], cortado=True))
+    t2 = tanda_ok([1], respuesta([fila("folio 19", texto="C")], continuacion="fin de B"))
+    assert [f.clave for f in tl.unir_tandas([t1])] == ["0:0", "0:1"]
+    assert [f.clave for f in tl.unir_tandas([t1, t2])] == ["0:0", "0:1", "1:0"]
+
+
+# ----------------------------------------------------------- proceso de fondo
+def test_tiempo_restante():
+    assert tl.tiempo_restante([], 2, 30, 100) == 2 * 100 + 70
+    assert tl.tiempo_restante([60, 80], 1, 90, 100) == 70  # la tanda en curso ya pasó el promedio
+    assert tl.tiempo_restante([60], 0, 10, 100) == 50
+
+
+def estado_para(n_paginas: int) -> dict:
+    return {"tandas": [tl.Tanda(p) for p in tl.armar_tandas(n_paginas)], "imagenes": [b"x"] * n_paginas,
+            "fecha_contexto": "01/10/2026", "version": 0, "procesando": True, "duraciones": [],
+            "latido": 0.0, "aviso": "", "actual": None, "faltan": 0, "inicio_tanda": 0.0}
+
+
+def test_trabajar_procesa_en_orden_con_contexto():
+    estado = estado_para(7)
+    vistos = []
+
+    def llamar(system, contenido):
+        vistos.append(contenido[-1]["text"])
+        n = len(vistos)
+        return respuesta([fila(f"folio {n}", texto=f"párrafo {n}")], cortado=n == 1), []
+
+    tl.trabajar(estado, [0, 1, 2], llamar, [], "claude-opus-5-5", reloj=lambda: 10.0)
+    assert [t.estado for t in estado["tandas"]] == ["ok", "ok", "ok"]
+    assert "No hay párrafo anterior" in vistos[0] and "01/10/2026" in vistos[0]
+    assert "párrafo 1" in vistos[1] and "cortado" in vistos[1]   # usa el final de la anterior
+    assert estado["procesando"] is False and estado["actual"] is None
+    assert len(estado["duraciones"]) == 3 and estado["version"] == 4
+
+
+def test_trabajar_se_frena_si_la_pagina_se_cerro():
+    estado = estado_para(6)
+    llamadas = []
+    reloj = iter([10.0, 10.0, 11.0, 500.0])  # después de la 1.ª tanda, nadie avisa que la página sigue abierta
+
+    def llamar(system, contenido):
+        llamadas.append(1)
+        return respuesta([fila()]), []
+
+    tl.trabajar(estado, [0, 1], llamar, [], "claude-opus-5-5", reloj=lambda: next(reloj))
+    assert len(llamadas) == 1
+    assert [t.estado for t in estado["tandas"]] == ["ok", "pendiente"]
+    assert estado["procesando"] is False
+
+
+def test_trabajar_frena_con_error_de_clave():
+    import anthropic
+    estado = estado_para(6)
+
+    def llamar(system, contenido):
+        raise _error_api(anthropic.AuthenticationError, 401)
+
+    tl.trabajar(estado, [0, 1], llamar, [], "claude-opus-5-5", reloj=lambda: 10.0)
+    assert [t.estado for t in estado["tandas"]] == ["error", "pendiente"]
+    assert "no es válida" in estado["aviso"] and estado["procesando"] is False
+
+
+def test_trabajar_sigue_si_una_tanda_falla():
+    estado = estado_para(6)
+    respuestas = iter(["roto", "roto", respuesta([fila()])])
+    tl.trabajar(estado, [0, 1], lambda s, c: (next(respuestas), []), [], "claude-opus-5-5", reloj=lambda: 10.0)
+    assert [t.estado for t in estado["tandas"]] == ["error", "ok"]
 
 
 def test_resumen():

@@ -174,11 +174,18 @@ clave de Anthropic en el archivo `.env` (`ANTHROPIC_API_KEY=...`, ver `.env.exam
 Tiene 3 secciones arriba:
 
 **① Transcribir**
-1. Subí el PDF. Opcional: la **fecha de contexto** (la del primer turno, por si la primera página no
-   la muestra). Se ve cuántas páginas tiene, en cuántas tandas se manda y un costo estimado.
-2. **▶️ Transcribir**. El PDF se manda en **tandas de 3 páginas** (fijo), de a una y en orden, con una
-   barra «Tanda X de N». Cada tanda tarda 1-2 minutos. **No toques nada mientras trabaja**: si se
-   corta, lo hecho queda y aparece «Continuar con las que faltan».
+1. Subí el PDF.
+2. **Nombre del documento final (Excel)**: «Transcripciones de [fecha] a [fecha].xlsx». Las fechas se
+   escriben seguidas (día, mes, año); con **Enter** se pasa a la segunda fecha y con otro **Enter**
+   se termina. La primera fecha también se le pasa a Claude como la del primer turno, por si la
+   primera página no la muestra. Si se dejan vacías, salen de la primera y la última fila.
+3. Se ve cuántas páginas tiene, en cuántas tandas se manda, el costo y el tiempo estimados.
+4. **▶️ Transcribir** y la app pasa sola a ②. Mientras transcribe, ① queda **en gris**: no se puede
+   subir otro PDF hasta que termine.
+   - El PDF se manda en **tandas de 3 páginas** (fijo), de a una y en orden, **de fondo**: se puede
+     navegar por la app sin cortar nada. **No recargues la página ni cierres la app**: se pierde todo
+     (si pasa, el proceso de fondo se frena solo, como mucho después de la tanda en curso, para no
+     gastar crédito en vano).
    - Cada página va como **imagen JPEG de 2576 px** de lado largo (el máximo que aprovecha el modelo):
      así la letra llega lo más nítida posible y la imagen que ves al revisar es exactamente la que
      leyó Claude. (Mandar el PDF tal cual no mejora nada: la API igual lo convierte en imágenes, sin
@@ -189,32 +196,37 @@ Tiene 3 secciones arriba:
      tanda queda con error y se sigue con las demás.
    - **Unión**: si una tanda trae `continuacion_del_anterior`, ese texto se pega al final de la
      última fila de la anterior y el folio pasa a «folio 18-19». Si una tanda terminó
-     `cortado_al_final` y la siguiente no trae continuación, esa fila queda **para revisar** (⚠️).
+     `cortado_al_final` y la siguiente (ya transcripta) no trae continuación, esa fila queda **para
+     revisar** (⚠️).
 
 **② Revisar y exportar**
+- **Proceso**: mientras transcribe, «Tanda X de N» con una barra según el tiempo que falta (estimado
+  con lo que tardaron las tandas anteriores). Al terminar, «Listo». Si una tanda falló, aparece con
+  su motivo y **🔁 Reintentar**: como cada tanda usa el final de la anterior, avisa que la siguiente
+  puede quedar desalineada y ofrece «Reintentar solo esta» o «desde esta hasta el final».
 - **Resumen**: filas, cantidad de `[?]` y `[ilegible]`, tandas con error, filas para revisar y el
   **costo real** (con los tokens, incluidos los reintentos).
-- **Tandas**: estado de cada una y botón **🔁 Reintentar**. Como cada tanda usa el final de la
-  anterior, al reintentar una se avisa que la siguiente puede quedar desalineada y se ofrece
-  «Reintentar solo esta» o «Reintentar desde esta hasta el final».
-- **Comparar con el libro**: elegís una fila; a la izquierda su texto (se corrige ahí) y a la derecha
-  la página escaneada (ya elegida la que corresponde por el folio; se puede cambiar).
-- **Tabla completa**: todas las filas, también editables con doble clic.
-- **Exportar**: Excel con **una hoja y 4 columnas**: Folio (texto: «folio 18», «folio 18-19»,
-  «folio 01 (libro nuevo)»), Fecha (fecha DD/MM/AAAA), Hora (HH:MM) y Transcripción (con los saltos
-  de línea y *ajustar texto*). Nombre sugerido: `LG_transcripcion_<primera fecha>_<última fecha>.xlsx`.
-- **Respuestas crudas del modelo**: lo que devolvió Claude en cada intento, tal cual, con el contexto
-  que se le pasó (también se descargan en un `.json`).
+- **Comparar con el libro**: se elige un **folio** (al lado, su fecha para guiarse); a la izquierda la
+  transcripción de ese folio y a la derecha la página escaneada. Se corrige el texto y **💾 Guardar
+  corrección**. Las páginas aparecen a medida que Claude las transcribe, así que se puede ir
+  revisando mientras trabaja. Si se corrige un párrafo cortado y después llega su continuación, la
+  continuación se agrega al final de lo corregido.
+  (El folio de cada página se deduce de los folios que leyó Claude en su tanda.)
+- **Vista previa del Excel**: todas las filas, solo para mirar.
+- **Exportar** (cuando termina): Excel con **una hoja y 4 columnas**: Folio (texto: «folio 18»,
+  «folio 18-19», «folio 01 (libro nuevo)»), Fecha (fecha DD/MM/AAAA), Hora (HH:MM) y Transcripción
+  (con los saltos de línea y *ajustar texto*), con el nombre elegido en ①.
 
-Lo transcripto vive **solo mientras la app está abierta** (igual que Asociación LG ↔ PCZ): descargá el
-Excel antes de cerrar. Si reintentás una tanda, se pierden las correcciones hechas a mano.
+Lo transcripto vive **solo mientras la app está abierta** (igual que Asociación LG ↔ PCZ): si se
+recarga la página o se cierra la app, se pierde todo. Descargá el Excel antes. Si reintentás una
+tanda, se pierden las correcciones de esa tanda (las demás quedan).
 
 **⚙️ Configuración** (queda guardada)
 - **Modelo**: Claude Opus 5.5 (por defecto, el mejor) o Claude Sonnet 5.5 (la mitad de precio).
+  Modelo y esfuerzo se guardan con **💾 Guardar** (avisa si hay cambios sin guardar).
 - **Esfuerzo**: cuánto analiza Claude cada página antes de responder: bajo, medio, **alto** (por
   defecto) o muy alto. Más esfuerzo = lee la letra con más cuidado, pero tarda y cuesta más (ese
-  análisis se cobra como salida). Queda guardado, igual que el modelo, y se ve en ① Transcribir y en
-  las respuestas crudas de cada intento.
+  análisis se cobra como salida). Se ve en ① Transcribir.
 - **Conexión con Claude**: muestra si la app encontró la clave en el `.env` y el botón **🔌 Probar la
   conexión con Claude**, que comprueba la clave, que la red deje llegar a `api.anthropic.com` y que el
   modelo esté disponible, sin gastar crédito. Si en plena transcripción falla la clave, la conexión o

@@ -13,6 +13,7 @@ import datetime as dt
 import io
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -191,6 +192,12 @@ class Fila:
     transcripcion: str
     tanda: int      # índice de la tanda de donde salió
     revisar: list[str] = field(default_factory=list)
+    orden: int = -1  # posición entre las filas de su tanda (-1: continuación sin párrafo anterior)
+
+    @property
+    def clave(self) -> str:
+        """Identifica la fila aunque lleguen tandas nuevas (para guardar correcciones)."""
+        return f"{self.tanda}:{self.orden}"
 
 
 class ErrorRespuesta(ValueError):
@@ -335,13 +342,14 @@ def unir_tandas(tandas: list[Tanda]) -> list[Fila]:
     anterior_ok = False
     for i, tanda in enumerate(tandas):
         if tanda.estado != "ok" or tanda.resultado is None:
-            if esperaba_continuacion and filas:
+            # Una tanda pendiente (todavía en proceso) no marca nada: la continuación puede llegar.
+            if tanda.estado == "error" and esperaba_continuacion and filas:
                 filas[-1].revisar.append(REVISAR_CORTADO)
             esperaba_continuacion = anterior_ok = False
             continue
         r = tanda.resultado
-        nuevas = [Fila(f["folio"], f["fecha"], f["hora"], f["transcripcion"], i, list(f["revisar"]))
-                  for f in r["filas"]]
+        nuevas = [Fila(f["folio"], f["fecha"], f["hora"], f["transcripcion"], i, list(f["revisar"]), k)
+                  for k, f in enumerate(r["filas"])]
         continuacion = r["continuacion_del_anterior"]
         if continuacion:
             if anterior_ok and filas:
@@ -504,9 +512,9 @@ def procesar_tanda(tanda: Tanda, llamar, system: list[dict], contenido: list[dic
             continue
         try:
             resultado = validar_respuesta(cruda)
-        except ErrorRespuesta as e:
+        except ErrorRespuesta as e:  # el detalle técnico queda en tanda.intentos
             tanda.intentos.append({"cruda": cruda, "uso": uso, "error": str(e), "contexto": contexto})
-            tanda.error = str(e)
+            tanda.error = "Claude respondió en un formato que no se pudo leer (dos intentos seguidos)."
             continue
         tanda.intentos.append({"cruda": cruda, "uso": uso, "error": "", "contexto": contexto})
         tanda.estado, tanda.resultado, tanda.error = "ok", resultado, ""
@@ -551,6 +559,108 @@ def estimar_costo(n_paginas: int, tokens_documentos: int, modelo: str,
     return costo(uso)
 
 
+# ----------------------------------------------------------- revisión por folio
+def _rango_folio(folio: str) -> tuple[int, int] | None:
+    n = _numeros_folio(folio)
+    return (int(n[0]), int(n[1])) if n else None
+
+
+def paginas_revisables(tandas: list[Tanda], filas: list[Fila]) -> list[dict]:
+    """Páginas ya transcriptas, cada una con su folio probable, sus fechas y sus filas.
+
+    El folio de cada página se deduce de los folios de las filas de su tanda: si la tanda empieza
+    con un párrafo nuevo, la 1.ª página es el folio más chico; si empieza con la continuación de
+    la anterior, se cuenta hacia atrás desde el folio más grande (la última página siempre tiene texto).
+    Devuelve [{"pagina", "folio" (int o None), "fechas", "filas" (índices en `filas`)}].
+    """
+    paginas = []
+    for ti, t in enumerate(tandas):
+        if t.estado != "ok" or t.resultado is None:
+            continue
+        rangos = [r for f in t.resultado["filas"] if (r := _rango_folio(f["folio"]))]
+        continua = bool(t.resultado["continuacion_del_anterior"])
+        if rangos and continua:
+            base = max(fin for _, fin in rangos) - (len(t.paginas) - 1)
+        elif rangos:
+            base = min(inicio for inicio, _ in rangos)
+        else:
+            # Tanda que es solo continuación: su folio es el último del párrafo que sigue.
+            fines = [r[1] for f in filas if f.tanda == ti - 1 and (r := _rango_folio(f.folio))]
+            base = max(fines) if continua and fines else None
+        for k, p in enumerate(t.paginas):
+            folio = base + k if base is not None else None
+            propias = []
+            for n, f in enumerate(filas):
+                rango = _rango_folio(f.folio)
+                if folio is not None and rango and ti - 1 <= f.tanda <= ti and rango[0] <= folio <= rango[1]:
+                    propias.append(n)
+                elif k == 0 and f.tanda == ti and (folio is None or not rango):
+                    propias.append(n)  # sin folio legible: a la 1.ª página de su tanda
+            fechas = list(dict.fromkeys(filas[n].fecha for n in propias if filas[n].fecha))
+            paginas.append({"pagina": p, "folio": folio, "fechas": fechas, "filas": propias})
+    return paginas
+
+
+def aplicar_correccion(texto: str, correccion: dict | None) -> str:
+    """Texto de la fila con la corrección a mano. Si después llegó una continuación (el texto
+    original creció), se agrega al final de lo corregido."""
+    if not correccion:
+        return texto
+    base = correccion["base"]
+    if texto != base and texto.startswith(base):
+        return correccion["texto"] + texto[len(base):]
+    return correccion["texto"]
+
+
+# ------------------------------------------------------------ proceso de fondo
+SEGUNDOS_POR_TANDA = {"low": 45, "medium": 70, "high": 100, "xhigh": 150}  # a ojo, hasta medir
+LATIDO_MAX = 90  # s sin noticias de la pantalla (página cerrada o recargada) → se frena
+
+
+def tiempo_restante(duraciones: list[float], faltan: int, en_curso: float, por_defecto: float) -> float:
+    """Segundos que faltan: `faltan` tandas sin empezar + lo que le queda a la que está en curso."""
+    promedio = sum(duraciones) / len(duraciones) if duraciones else por_defecto
+    return faltan * promedio + max(promedio - en_curso, 0)
+
+
+def trabajar(estado: dict, indices: list[int], llamar, system: list[dict], modelo: str, reloj=time.time):
+    """Procesa las tandas de `indices` de a una, en orden. Corre en un hilo aparte: no toca Streamlit.
+
+    `estado` es la sesión de transcripción (tandas, imágenes, fecha de contexto...). La pantalla
+    actualiza estado["latido"] cada pocos segundos; si deja de hacerlo, se frena antes de la
+    siguiente tanda para no gastar crédito en vano.
+    """
+    import anthropic
+
+    tandas = estado["tandas"]
+    try:
+        for k, i in enumerate(indices):
+            if estado.get("cancelar") or reloj() - estado["latido"] > LATIDO_MAX:
+                break
+            t = tandas[i]
+            contexto = contexto_para(tandas, i, estado["fecha_contexto"])
+            contenido = mensaje_usuario([estado["imagenes"][p] for p in t.paginas], t.paginas, contexto)
+            estado["actual"], estado["faltan"], estado["inicio_tanda"] = i, len(indices) - k - 1, reloj()
+            try:
+                procesar_tanda(t, llamar, system, contenido, contexto)
+            except anthropic.APIError as e:
+                mensaje, frenar = explicar_error(e, modelo)
+                t.intentos.append({"cruda": "", "uso": [], "error": mensaje, "contexto": contexto})
+                t.estado, t.error = "error", mensaje
+                if frenar:  # las demás tandas fallarían igual
+                    estado["aviso"] = mensaje
+                    break
+            except Exception as e:  # nunca dejar el proceso colgado
+                t.estado, t.error = "error", f"Error inesperado: {e}"
+            finally:
+                estado["duraciones"].append(reloj() - estado["inicio_tanda"])
+                estado["version"] += 1
+    finally:
+        estado["actual"] = None
+        estado["procesando"] = False
+        estado["version"] += 1
+
+
 # --------------------------------------------------------------- exportación
 COLUMNAS = ["Folio", "Fecha", "Hora", "Transcripción"]
 MAX_CELDA = 32767
@@ -568,13 +678,16 @@ def resumen(filas: list[Fila], tandas: list[Tanda]) -> dict:
     }
 
 
-def nombre_archivo(filas: list[dict]) -> str:
-    """LG_transcripcion_<fecha primera fila>_<fecha última fila>.xlsx (fechas con guiones)."""
+def nombre_excel(desde: dt.date | None, hasta: dt.date | None, filas: list[dict] = ()) -> str:
+    """'Transcripciones de 01-10-2026 a 06-10-2026.xlsx'. Las fechas que falten salen de las filas."""
     fechas = [normalizar_fecha(f["Fecha"]) for f in filas]
-    fechas = [f.replace("/", "-") for f in fechas if f]
-    if not fechas:
-        return "LG_transcripcion.xlsx"
-    return f"LG_transcripcion_{fechas[0]}_{fechas[-1]}.xlsx"
+    fechas = [dt.datetime.strptime(f, "%d/%m/%Y").date() for f in fechas if f]
+    desde = desde or (fechas[0] if fechas else None)
+    hasta = hasta or (fechas[-1] if fechas else None)
+    if desde is None and hasta is None:
+        return "Transcripciones LG.xlsx"
+    texto = lambda d: d.strftime("%d-%m-%Y") if d else "…"
+    return f"Transcripciones de {texto(desde)} a {texto(hasta)}.xlsx"
 
 
 def exportar_excel(filas: list[dict]) -> bytes:

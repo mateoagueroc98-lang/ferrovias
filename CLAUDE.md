@@ -57,14 +57,21 @@ copiadas de PCZ: `EXTRAS_PCZ`, N° consecutivo desde el número que se elige,
 Fecha d/m/yyyy, Descripción = PCZ en MAYÚSCULAS + renglón vacío + LG) y LG sin asociar (columnas originales). Tests en `tests/` (`python -m pytest`); Excels inventados en `tests/ejemplos/`.
 
 **Transcripciones del LG**: PDF escaneado del Libro de Guardia → Excel con la API de Claude (visión).
-Páginas → JPEG de 2576 px (`pypdfium2`), en tandas FIJAS de 3, de a una y en orden (cada tanda recibe
-última fecha + último párrafo de la anterior). System = instrucciones + referencia (con caché). JSON
+Páginas → JPEG de 2576 px (`pypdfium2`), en tandas FIJAS de 3, de a una y en orden, en un **hilo de
+fondo** (`tl.trabajar`): se puede navegar mientras transcribe; un `st.fragment(run_every=2)` muestra el
+avance, manda el «latido» (sin latido 90 s → el hilo se frena) y refresca al llegar cada tanda. Cada tanda
+recibe última fecha + último párrafo de la anterior. System = instrucciones + referencia (con caché). JSON
 validado; si viene mal, 1 reintento y si no, tanda con error. Unión: `continuacion_del_anterior` se pega a
-la última fila (folio «X-Y»); `cortado_al_final` sin continuación → fila para revisar. Revisión fila ↔
-página, correcciones a mano, reintentar tanda (o desde ahí al final), respuestas crudas y costo. Excel de 1
-hoja: Folio (texto) | Fecha (DD/MM/AAAA) | Hora (HH:MM) | Transcripción (ajustar texto). Los 2 documentos,
-el modelo y el esfuerzo (`low`/`medium`/`high`/`xhigh`, por defecto `high`) se editan en ⚙️ Configuración y se guardan en `config/transcripcion_lg/` (SÍ va a git; con
-`historial/` y `originales/`); la app nunca los modifica sola. PDF inventado en `tests/ejemplos/LG_ejemplo.pdf`.
+la última fila (folio «X-Y»); `cortado_al_final` sin continuación (siguiente ya hecha) → fila para revisar.
+① nombre del Excel = «Transcripciones de [fecha] a [fecha]» (Enter salta de fecha; la 1.ª es la fecha de
+contexto), en gris mientras transcribe. ② Proceso (barra por tiempo restante, solo tandas fallidas con
+Reintentar), resumen, revisión por folio (`paginas_revisables`) con corrección guardada por clave de
+fila (`tanda:orden`; `aplicar_correccion` suma continuaciones que lleguen después) y vista previa. Sin
+respuestas crudas en pantalla. Todo en memoria: recargar = perder todo. Excel de 1 hoja: Folio (texto) |
+Fecha (DD/MM/AAAA) | Hora (HH:MM) | Transcripción (ajustar texto). Los 2 documentos, el modelo y el
+esfuerzo (`low`/`medium`/`high`/`xhigh`, por defecto `high`; botón Guardar) se editan en ⚙️ Configuración
+y se guardan en `config/transcripcion_lg/` (SÍ va a git; con `historial/` y `originales/`); la app nunca
+los modifica sola. PDF inventado en `tests/ejemplos/LG_ejemplo.pdf`.
 
 **Concatenación**: CSV del reporte LibroNovedades (una fila por renglón) → Excel con una fila por
 número de novedad (Nro, Fecha, Hora inicio, Hora fin, Detalle). Hora fin = hora del último renglón cuyo

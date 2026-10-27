@@ -1,8 +1,9 @@
 """Módulo: Transcripciones del LG (PDF escaneado del Libro de Guardia → Excel, con la API de Claude)."""
+import copy
 import hashlib
-import json
 import os
-import re
+import threading
+import time
 
 import anthropic
 import pandas as pd
@@ -17,10 +18,10 @@ st.caption("Transcribe a Excel el PDF escaneado del Libro de Guardia de Señalam
 ss = st.session_state
 P = "tlg_"  # prefijo de las claves de este módulo en session_state
 SECCIONES = ["① Transcribir", "② Revisar y exportar", "⚙️ Configuración"]
-ICONO = {"ok": "✅", "error": "❌", "pendiente": "⏳"}
 
-ss.setdefault(P + "correcciones", {})   # {n° de fila: {"Folio"/"Fecha"/"Hora"/"Transcripción": texto}}
-ss.setdefault(P + "version", 0)         # sube cuando cambian las filas (resetea los editores)
+# Correcciones a mano: {clave de la fila: {"texto": corregido, "base": texto original al corregir}}.
+# Todo vive solo en memoria: si se recarga la página, se pierde (también la transcripción).
+ss.setdefault(P + "correcciones", {})
 ss.setdefault(P + "seccion", SECCIONES[0])
 if siguiente := ss.pop(P + "ir_a", None):
     ss[P + "seccion"] = siguiente
@@ -37,6 +38,11 @@ def sesion() -> dict | None:
     return ss.get(P + "sesion")
 
 
+def procesando() -> bool:
+    s = sesion()
+    return bool(s and s["procesando"])
+
+
 def documentos() -> tuple[str, str]:
     return tl.leer_documento("instrucciones"), tl.leer_documento("referencia")
 
@@ -45,155 +51,297 @@ def hay_clave() -> bool:
     return bool(os.getenv("ANTHROPIC_API_KEY", "").strip())
 
 
-# --------------------------------------------------------------- procesamiento
-def procesar(indices: list[int]) -> None:
-    """Procesa las tandas indicadas de a una, en orden, mostrando el progreso."""
+# --------------------------------------------------------------- proceso de fondo
+def lanzar(indices: list[int]) -> None:
+    """Arranca (en un hilo aparte) el procesamiento de las tandas indicadas, de a una y en orden.
+
+    La pantalla sigue libre: se puede ir a ② y ver las páginas a medida que llegan.
+    """
     s = sesion()
-    tandas = s["tandas"]
-    instrucciones, referencia = documentos()
-    system = tl.system_prompt(instrucciones, referencia)
     ajustes = tl.leer_ajustes()
     modelo, esfuerzo = ajustes["modelo"], ajustes["esfuerzo"]
+    instrucciones, referencia = documentos()
+    system = tl.system_prompt(instrucciones, referencia)
     client = anthropic.Anthropic()
 
     def llamar(system, contenido):
         return tl.llamar_api(client, modelo, system, contenido, esfuerzo)
 
-    barra = st.progress(0.0)
-    for k, i in enumerate(indices):
-        t = tandas[i]
-        barra.progress(k / len(indices), text=f"Tanda {i + 1} de {len(tandas)} ({t.nombre}): "
-                                              "esperando la respuesta de Claude (puede tardar 1-2 minutos)...")
-        contexto = tl.contexto_para(tandas, i, s["fecha_contexto"])
-        contenido = tl.mensaje_usuario([s["imagenes"][p] for p in t.paginas], t.paginas, contexto)
+    for i in indices:
+        t = s["tandas"][i]
+        t.estado, t.resultado, t.error = "pendiente", None, ""
+    # Las correcciones de las tandas que se rehacen ya no corresponden.
+    rehechas = {str(i) for i in indices}
+    ss[P + "correcciones"] = {k: v for k, v in ss[P + "correcciones"].items()
+                              if k.split(":")[0] not in rehechas}
+    s.update(procesando=True, actual=None, faltan=len(indices), inicio_tanda=time.time(), duraciones=[],
+             latido=time.time(), aviso="", cancelar=False, esfuerzo=esfuerzo)
+    ss[P + "version_vista"] = s["version"]
+    threading.Thread(target=tl.trabajar, args=(s, indices, llamar, system, modelo), daemon=True).start()
+
+
+@st.fragment(run_every=2)
+def avance(completo: bool) -> None:
+    """Se refresca cada 2 s mientras se transcribe: muestra el avance y le avisa al proceso de
+    fondo que la página sigue abierta. Cuando llega una tanda nueva, actualiza toda la pantalla."""
+    s = sesion()
+    if s is None:
+        return
+    s["latido"] = time.time()
+    if s["version"] != ss.get(P + "version_vista"):
+        ss[P + "version_vista"] = s["version"]
+        if seccion != SECCIONES[2] or not s["procesando"]:  # en ⚙️ no interrumpir la edición
+            st.rerun()
+    if not s["procesando"]:
+        return
+    tandas = s["tandas"]
+    i = s["actual"] if s["actual"] is not None else 0
+    en_curso = time.time() - s["inicio_tanda"]
+    hechas = sum(s["duraciones"])
+    restante = tl.tiempo_restante(s["duraciones"], s["faltan"], en_curso,
+                                  tl.SEGUNDOS_POR_TANDA[s["esfuerzo"]])
+    minutos = max(1, round(restante / 60))
+    texto = (f"⏳ Transcribiendo la tanda {i + 1} de {len(tandas)} ({tandas[i].nombre}) · "
+             f"faltan ≈ {minutos} min")
+    if completo:
+        st.progress(min((hechas + en_curso) / max(hechas + en_curso + restante, 1), 0.99), text=texto)
+        st.caption("Podés ir revisando las páginas que ya llegaron. No recargues la página ni cierres la "
+                   "app: se pierde todo y la transcripción se frena.")
+    else:
+        st.info(texto + ". El avance y las páginas que ya llegaron se ven en ② Revisar y exportar.")
+
+
+# ================================================================ ① Transcribir
+# Enter en las fechas del nombre: de la fecha «de» pasa a la fecha «a»; en la «a», termina.
+ENTER_FECHAS = """<script>
+(function () {
+  if (window.__tlgEnterFechas) return;
+  window.__tlgEnterFechas = true;
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    const el = document.activeElement;
+    const desde = el && el.closest('.st-key-tlg_desde');
+    const hasta = el && el.closest('.st-key-tlg_hasta');
+    if (!desde && !hasta) return;
+    e.preventDefault();
+    e.stopPropagation();
+    el.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));  // cierra el calendario
+    if (desde) {
+      const dia = document.querySelector('.st-key-tlg_hasta [role="spinbutton"]');
+      if (dia) { dia.focus(); return; }
+    }
+    el.blur();
+  }, true);
+})();
+</script>"""
+
+
+def pantalla_transcribir():
+    ocupado = procesando()
+    if ocupado:
+        avance(False)
+        # Todo en gris hasta que termine el PDF actual.
+        st.html("<style>.st-key-tlg_carga { opacity: .5; }</style>")
+    st.html(ENTER_FECHAS, unsafe_allow_javascript=True)
+
+    with st.container(key=P + "carga"):
+        st.header("1. PDF del Libro de Guardia")
+        archivo = st.file_uploader("Subí el PDF escaneado del LG", type=["pdf"], key=P + "pdf",
+                                   disabled=ocupado)
+
+        st.markdown("**Nombre del documento final (Excel)**")
+        c = st.columns([1.35, 2, .25, 2, .5], vertical_alignment="center")
+        c[0].markdown("Transcripciones de")
+        desde = c[1].date_input("Desde", value=None, format="DD/MM/YYYY", key=P + "desde",
+                                label_visibility="collapsed", disabled=ocupado, persist_state="session")
+        c[2].markdown("a")
+        hasta = c[3].date_input("Hasta", value=None, format="DD/MM/YYYY", key=P + "hasta",
+                                label_visibility="collapsed", disabled=ocupado, persist_state="session")
+        c[4].markdown(".xlsx")
+        st.caption("Escribí día, mes y año seguidos; con **Enter** pasás a la segunda fecha y con otro "
+                   "**Enter** terminás. La primera fecha también se le pasa a Claude como la del primer "
+                   "turno, por si la primera página no la muestra.")
+        if desde and hasta and hasta < desde:
+            st.warning("La segunda fecha es anterior a la primera.")
+
+        if archivo is None:
+            if not ocupado:
+                st.info("Subí el PDF para empezar.")
+            return
+
+        contenido = archivo.getvalue()
         try:
-            tl.procesar_tanda(t, llamar, system, contenido, contexto)
-        except anthropic.APIError as e:
-            mensaje, frenar = tl.explicar_error(e, modelo)
-            t.estado, t.error = "error", mensaje
-            t.intentos.append({"cruda": "", "uso": [], "error": mensaje, "contexto": contexto})
-            if frenar:  # las demás tandas fallarían igual: se frena y se avisa
-                ss[P + "aviso"] = (mensaje + " Se frenó la transcripción. Cuando esté resuelto, tocá "
-                                   "«🔁 Reintentar» en la tanda con ❌ y elegí «hasta el final».")
-                break
-    barra.progress(1.0, text="Listo.")
-    # Cambiaron las filas: las correcciones a mano ya no corresponden.
-    ss[P + "correcciones"] = {}
-    ss[P + "version"] += 1
+            imagenes = imagenes_pdf(contenido)
+        except Exception as e:  # PDF dañado o con contraseña
+            st.error(f"No se pudo leer el PDF: {e}")
+            return
+        pdf_id = hashlib.sha1(contenido).hexdigest()
+        n_tandas = len(tl.armar_tandas(len(imagenes)))
+        instrucciones, referencia = documentos()
+        ajustes = tl.leer_ajustes()
+        modelo, esfuerzo = ajustes["modelo"], ajustes["esfuerzo"]
+        estimado = tl.estimar_costo(len(imagenes), tl.tokens_aprox(instrucciones + referencia), modelo, esfuerzo)
+        minutos = round(n_tandas * tl.SEGUNDOS_POR_TANDA[esfuerzo] / 60)
+        st.markdown(f"**{len(imagenes)} páginas** → **{n_tandas} tandas** de hasta {tl.PAGINAS_POR_TANDA} "
+                    f"páginas. Modelo: `{modelo}` · esfuerzo **{tl.ESFUERZOS[esfuerzo].split(' (')[0].lower()}**. "
+                    f"Costo estimado: **≈ US\\$ {estimado:.2f}** · tiempo ≈ {max(minutos, 1)} min (a ojo). "
+                    "Modelo y esfuerzo se cambian en ⚙️ Configuración.")
+        with st.expander("Ver las páginas"):
+            n = st.number_input("Página", 1, len(imagenes), 1, key=P + "ver_pag")
+            st.image(imagenes[n - 1], width=450)
+
+        if ocupado:
+            return
+        if not hay_clave():
+            st.error("Falta la clave de Anthropic. Creá el archivo `.env` en la carpeta de la app (copiando "
+                     "`.env.example`), poné tu clave en `ANTHROPIC_API_KEY=...` y volvé a abrir la app.")
+            return
+
+        s = sesion()
+        if s is not None and s["pdf_id"] == pdf_id:
+            pendientes = [i for i, t in enumerate(s["tandas"]) if t.estado == "pendiente"]
+            if pendientes:
+                st.warning(f"La transcripción de este PDF quedó a medias: faltan {len(pendientes)} tanda(s).")
+                if st.button("▶️ Continuar con las que faltan", type="primary"):
+                    lanzar(pendientes)
+                    ss[P + "ir_a"] = SECCIONES[1]
+                    st.rerun()
+            else:
+                st.success("Este PDF ya está transcripto. Revisalo en ② Revisar y exportar.")
+            texto_boton, tipo = "🔁 Transcribir de nuevo desde cero", "secondary"
+        else:
+            if s is not None:
+                st.warning(f"Hay otra transcripción en memoria ({s['nombre']}). Si empezás esta, se pierde: "
+                           "descargá antes su Excel si lo necesitás.")
+            texto_boton, tipo = "▶️ Transcribir", "primary"
+
+        if st.button(texto_boton, type=tipo):
+            ss[P + "sesion"] = {
+                "pdf_id": pdf_id, "nombre": archivo.name, "imagenes": imagenes,
+                "fecha_contexto": desde.strftime("%d/%m/%Y") if desde else "",
+                "tandas": [tl.Tanda(p) for p in tl.armar_tandas(len(imagenes))],
+                "version": 0, "procesando": False,
+            }
+            ss[P + "correcciones"] = {}
+            lanzar(list(range(n_tandas)))
+            ss[P + "ir_a"] = SECCIONES[1]
+            st.rerun()
+
+
+# ======================================================== ② Revisar y exportar
+def filas_finales(unidas: list[tl.Fila]) -> list[dict]:
+    """Filas unidas, con las correcciones a mano aplicadas."""
+    correcciones = ss[P + "correcciones"]
+    return [{"Folio": f.folio, "Fecha": f.fecha, "Hora": f.hora,
+             "Transcripción": tl.aplicar_correccion(f.transcripcion, correcciones.get(f.clave)),
+             "Revisar": "; ".join(f.revisar), "clave": f.clave, "original": f.transcripcion}
+            for f in unidas]
+
+
+def al_guardar_correcciones(campos: list[tuple[str, str, str]]) -> None:
+    """campos: (clave de la fila, clave del cuadro de texto, texto original de la fila)."""
+    cambios = 0
+    for clave, widget, original in campos:
+        texto = tl._limpiar(ss[widget]).strip()
+        actual = tl.aplicar_correccion(original, ss[P + "correcciones"].get(clave))
+        if texto != actual:
+            ss[P + "correcciones"][clave] = {"texto": texto, "base": original}
+            cambios += 1
+    ss[P + "msg_corr"] = ("success", "Corrección guardada.") if cambios else ("info", "No había cambios.")
 
 
 def reintentar(i: int, hasta_el_final: bool) -> None:
     tandas = sesion()["tandas"]
-    indices = list(range(i, len(tandas))) if hasta_el_final else [i]
-    for j in indices:
-        tandas[j].estado, tandas[j].resultado, tandas[j].error = "pendiente", None, ""
     ss.pop(P + "reintentar", None)
-    procesar(indices)
+    lanzar(list(range(i, len(tandas))) if hasta_el_final else [i])
 
 
-# ================================================================ ① Transcribir
-def pantalla_transcribir():
-    st.header("1. PDF del Libro de Guardia")
-    archivo = st.file_uploader("Subí el PDF escaneado del LG", type=["pdf"], key=P + "pdf")
-    fecha = st.date_input(
-        "Fecha de contexto (opcional)", value=None, format="DD/MM/YYYY", key=P + "fecha",
-        help="La fecha del primer turno, por si la primera página no la muestra.")
-    if archivo is None:
-        st.info("Subí el PDF para empezar.")
-        return
-
-    contenido = archivo.getvalue()
-    try:
-        imagenes = imagenes_pdf(contenido)
-    except Exception as e:  # PDF dañado o con contraseña
-        st.error(f"No se pudo leer el PDF: {e}")
-        return
-    pdf_id = hashlib.sha1(contenido).hexdigest()
-    n_tandas = len(tl.armar_tandas(len(imagenes)))
-    instrucciones, referencia = documentos()
-    ajustes = tl.leer_ajustes()
-    modelo, esfuerzo = ajustes["modelo"], ajustes["esfuerzo"]
-    estimado = tl.estimar_costo(len(imagenes), tl.tokens_aprox(instrucciones + referencia), modelo, esfuerzo)
-    st.markdown(f"**{len(imagenes)} páginas** → **{n_tandas} tandas** de hasta {tl.PAGINAS_POR_TANDA} "
-                f"páginas. Modelo: `{modelo}` · esfuerzo **{tl.ESFUERZOS[esfuerzo].split(' (')[0].lower()}**. "
-                f"Costo estimado: **≈ US\\$ {estimado:.2f}** (a ojo; el real se ve al terminar). "
-                "Modelo y esfuerzo se cambian en ⚙️ Configuración.")
-    with st.expander("Ver las páginas"):
-        n = st.number_input("Página", 1, len(imagenes), 1, key=P + "ver_pag")
-        st.image(imagenes[n - 1], width=450)
-
-    if not hay_clave():
-        st.error("Falta la clave de Anthropic. Creá el archivo `.env` en la carpeta de la app (copiando "
-                 "`.env.example`), poné tu clave en `ANTHROPIC_API_KEY=...` y volvé a abrir la app.")
-        return
-
-    s = sesion()
-    if s is not None and s["pdf_id"] == pdf_id:
-        pendientes = [i for i, t in enumerate(s["tandas"]) if t.estado == "pendiente"]
-        if pendientes:
-            st.warning(f"La transcripción de este PDF quedó a medias: faltan {len(pendientes)} tanda(s).")
-            if st.button("▶️ Continuar con las que faltan", type="primary"):
-                procesar(pendientes)
-                ss[P + "ir_a"] = SECCIONES[1]
-                st.rerun()
-        else:
-            st.success("Este PDF ya está transcripto. Revisalo en ② Revisar y exportar.")
-        texto_boton = "🔁 Transcribir de nuevo desde cero"
-    else:
-        if s is not None:
-            st.warning(f"Hay otra transcripción en memoria ({s['nombre']}). Si empezás esta, se pierde: "
-                       "descargá antes su Excel si lo necesitás.")
-        texto_boton = "▶️ Transcribir"
-
-    st.caption("Mientras transcribe no toques nada ni cambies de módulo: se cortaría la tanda en curso "
-               "(lo ya hecho queda y se puede continuar).")
-    if st.button(texto_boton, type="primary" if s is None or s["pdf_id"] != pdf_id else "secondary"):
-        ss[P + "sesion"] = {
-            "pdf_id": pdf_id, "nombre": archivo.name, "imagenes": imagenes,
-            "fecha_contexto": fecha.strftime("%d/%m/%Y") if fecha else "",
-            "tandas": [tl.Tanda(p) for p in tl.armar_tandas(len(imagenes))],
-        }
-        procesar(list(range(n_tandas)))
-        ss[P + "ir_a"] = SECCIONES[1]
-        st.rerun()
-
-
-# ======================================================== ② Revisar y exportar
-def filas_finales(s: dict) -> list[dict]:
-    """Filas unidas con las correcciones a mano aplicadas."""
-    filas = []
-    for n, f in enumerate(tl.unir_tandas(s["tandas"])):
-        fila = {"Folio": f.folio, "Fecha": f.fecha, "Hora": f.hora, "Transcripción": f.transcripcion,
-                "Tanda": f.tanda + 1, "Revisar": "; ".join(f.revisar)}
-        fila.update(ss[P + "correcciones"].get(n, {}))
-        filas.append(fila)
-    return filas
-
-
-def corregir(n: int, campo: str, valor: str) -> None:
-    ss[P + "correcciones"].setdefault(n, {})[campo] = valor
-
-
-def al_editar_tabla(clave: str) -> None:
-    for n, cambios in ss[clave]["edited_rows"].items():
-        for campo, valor in cambios.items():
-            corregir(int(n), campo, "" if valor is None else str(valor))
-    ss[P + "version"] += 1  # resetea el editor (los cambios ya están en las correcciones)
-
-
-def al_editar_texto(n: int, campo: str, clave: str) -> None:
-    corregir(n, campo, ss[clave])
-    ss[P + "version"] += 1
-
-
-def pagina_probable(s: dict, filas: list[dict], n: int) -> list[int]:
-    """Páginas para mirar al lado de la fila n: las de su tanda (+ la 1.ª de la siguiente)."""
+def seccion_proceso(s: dict) -> None:
     tandas = s["tandas"]
-    t = filas[n]["Tanda"] - 1
-    paginas = list(tandas[t].paginas)
-    if t + 1 < len(tandas):
-        paginas.append(tandas[t + 1].paginas[0])
-    return paginas
+    st.header("Proceso")
+    if s["procesando"]:
+        avance(True)
+        return
+    if s.get("aviso"):
+        st.error(s["aviso"] + " Se frenó la transcripción: cuando esté resuelto, reintentá abajo.")
+    fallidas = [i for i, t in enumerate(tandas) if t.estado == "error"]
+    pendientes = [i for i, t in enumerate(tandas) if t.estado == "pendiente"]
+    if not fallidas and not pendientes:
+        st.success(f"✅ Listo: se transcribieron las {len(s['imagenes'])} páginas.")
+        return
+    for i in fallidas:
+        c1, c2 = st.columns([5, 1.2], vertical_alignment="center")
+        c1.error(f"Tanda {i + 1} ({tandas[i].nombre}): {tandas[i].error or 'error'}", icon="❌")
+        if c2.button("🔁 Reintentar", key=f"{P}reint_{i}", width="stretch"):
+            ss[P + "reintentar"] = i
+    if pendientes:
+        c1, c2 = st.columns([5, 1.2], vertical_alignment="center")
+        c1.warning(f"Faltan {len(pendientes)} tanda(s) sin transcribir.", icon="⏳")
+        if c2.button("▶️ Continuar", key=P + "continuar", width="stretch"):
+            lanzar(pendientes)
+            st.rerun()
+
+    if (i := ss.get(P + "reintentar")) is not None and i < len(tandas):
+        with st.container(border=True):
+            siguientes = i + 1 < len(tandas) and any(t.estado == "ok" for t in tandas[i + 1:])
+            if siguientes:
+                st.warning(
+                    f"Vas a reintentar la **tanda {i + 1}**. Las tandas van en fila: la {i + 2} usó el final "
+                    f"de esta como contexto, así que si la {i + 1} cambia, la {i + 2} (y las que siguen) "
+                    "pueden quedar desalineadas: filas repetidas o un párrafo partido en dos.")
+            b1, b2, b3 = st.columns(3)
+            if b1.button(f"Reintentar solo la tanda {i + 1}", type="primary", width="stretch"):
+                reintentar(i, hasta_el_final=False)
+                st.rerun()
+            if i + 1 < len(tandas) and b2.button(f"Reintentar de la {i + 1} hasta el final", width="stretch"):
+                reintentar(i, hasta_el_final=True)
+                st.rerun()
+            if b3.button("Cancelar", width="stretch"):
+                ss.pop(P + "reintentar")
+                st.rerun()
+
+
+def seccion_comparar(s: dict, tandas: list[tl.Tanda], unidas: list[tl.Fila], filas: list[dict]) -> None:
+    st.header("Comparar con el libro")
+    paginas = tl.paginas_revisables(tandas, unidas)
+    if not paginas:
+        st.info("Todavía no llegó ninguna página. Aparecen acá a medida que Claude las transcribe.")
+        return
+    st.caption("Elegí un folio: a la izquierda su transcripción (se puede corregir) y a la derecha la "
+               "página escaneada.")
+
+    def etiqueta(k):
+        pag = paginas[k]
+        folio = f"folio {pag['folio']:02d}" if pag["folio"] is not None else f"pág. {pag['pagina'] + 1} del PDF"
+        fechas = pag["fechas"]
+        fecha = (fechas[0] if len(fechas) == 1 else f"{fechas[0]} al {fechas[-1]}") if fechas else "sin fecha"
+        return f"{folio} · {fecha}"
+
+    k = st.selectbox("Folio", range(len(paginas)), format_func=etiqueta, key=P + "folio")
+    pag = paginas[min(k or 0, len(paginas) - 1)]
+    izq, der = st.columns([1, 1], gap="medium")
+    with izq:
+        if msg := ss.pop(P + "msg_corr", None):
+            getattr(st, msg[0])(msg[1])
+        if not pag["filas"]:
+            st.info("Esta página no tiene texto transcripto.")
+        else:
+            campos = []
+            with st.form(P + "form_corr", border=False):
+                for n in pag["filas"]:
+                    f = filas[n]
+                    # La clave cambia si el texto cambia (p. ej. llegó la continuación): el cuadro se renueva.
+                    widget = f"{P}corr_{f['clave']}_{hashlib.sha1(f['Transcripción'].encode()).hexdigest()[:8]}"
+                    campos.append((f["clave"], widget, f["original"]))
+                    etiqueta_fila = f"{f['Folio']} · {f['Fecha'] or 'sin fecha'}"
+                    if f["Revisar"]:
+                        etiqueta_fila += f" · ⚠️ revisar: {f['Revisar']}"
+                    st.text_area(etiqueta_fila, value=f["Transcripción"], key=widget,
+                                 height=520 if len(pag["filas"]) == 1 else 300)
+                st.form_submit_button("💾 Guardar corrección", type="primary",
+                                      on_click=al_guardar_correcciones, args=(campos,))
+    with der:
+        st.image(s["imagenes"][pag["pagina"]], width="stretch")
 
 
 def pantalla_revisar():
@@ -201,13 +349,16 @@ def pantalla_revisar():
     if s is None:
         st.info("Todavía no hay ninguna transcripción. Empezá en ① Transcribir.")
         return
-    if aviso := ss.pop(P + "aviso", None):
-        st.error(aviso)
-    tandas = s["tandas"]
-    filas = filas_finales(s)
-    res = tl.resumen(tl.unir_tandas(tandas), tandas)
-    uso = tl.uso_total(tandas)
+    # Foto fija de las tandas: el proceso de fondo las puede cambiar mientras se dibuja la pantalla.
+    tandas = [copy.copy(t) for t in s["tandas"]]
+    unidas = tl.unir_tandas(tandas)
+    filas = filas_finales(unidas)
+    seccion_proceso(s)
 
+    res = tl.resumen(unidas, tandas)
+    res["dudosos"] = sum(f["Transcripción"].count("[?]") for f in filas)
+    res["ilegibles"] = sum(f["Transcripción"].lower().count("[ilegible]") for f in filas)
+    uso = tl.uso_total(tandas)
     st.header("Resumen")
     st.caption(f"Archivo: {s['nombre']} · {len(s['imagenes'])} páginas · {len(tandas)} tandas")
     c = st.columns(6)
@@ -220,156 +371,36 @@ def pantalla_revisar():
                 help=f"{uso['llamadas']} llamadas · {uso['entrada']:,} tokens de entrada · "
                      f"{uso['salida']:,} de salida (incluye reintentos)".replace(",", "."))
 
-    # ------------------------------------------------------------ tandas
-    st.header("Tandas")
-    for i, t in enumerate(tandas):
-        c1, c2, c3 = st.columns([1.3, 4, 1.2], vertical_alignment="center")
-        c1.markdown(f"{ICONO[t.estado]} **Tanda {i + 1}** · {t.nombre}")
-        if t.estado == "ok":
-            r = t.resultado
-            extra = []
-            if r["continuacion_del_anterior"]:
-                extra.append("trae continuación de la anterior")
-            if r["cortado_al_final"]:
-                extra.append("termina cortada")
-            c2.caption(f"{len(r['filas'])} filas" + (f" · {' · '.join(extra)}" if extra else "")
-                       + (f" · {len(t.intentos)} intentos" if len(t.intentos) > 1 else ""))
-        elif t.estado == "error":
-            c2.error(t.error or "Error", icon="❌")
-        else:
-            c2.caption("Pendiente")
-        if c3.button("🔁 Reintentar", key=f"{P}reint_{i}", width="stretch"):
-            ss[P + "reintentar"] = i
-
-    if (i := ss.get(P + "reintentar")) is not None and i < len(tandas):
-        with st.container(border=True):
-            if i + 1 < len(tandas):
-                st.warning(
-                    f"Vas a reintentar la **tanda {i + 1}**. Las tandas van en fila: la tanda {i + 2} "
-                    f"usó el final de esta como contexto, así que si la {i + 1} cambia, la {i + 2} "
-                    "(y las que siguen) pueden quedar desalineadas: filas repetidas o un párrafo "
-                    "partido en dos.")
-            if ss[P + "correcciones"]:
-                st.warning("Las correcciones que hiciste a mano en la tabla se van a perder.")
-            b1, b2, b3 = st.columns(3)
-            if b1.button(f"Reintentar solo la tanda {i + 1}", type="primary", width="stretch"):
-                reintentar(i, hasta_el_final=False)
-                st.rerun()
-            if i + 1 < len(tandas) and b2.button(f"Reintentar de la {i + 1} hasta el final",
-                                                 width="stretch"):
-                reintentar(i, hasta_el_final=True)
-                st.rerun()
-            if b3.button("Cancelar", width="stretch"):
-                ss.pop(P + "reintentar")
-                st.rerun()
-
+    seccion_comparar(s, tandas, unidas, filas)
     if not filas:
-        st.info("No hay filas transcriptas todavía.")
-        respuestas_crudas(tandas)
         return
 
-    # --------------------------------------------- comparar fila con página
-    st.header("Comparar con el libro")
-    st.caption("Elegí una fila: a la izquierda su texto (se puede corregir) y a la derecha la página "
-               "escaneada. Las correcciones se aplican al Excel.")
-    v = ss[P + "version"]
+    st.header("Vista previa del Excel")
+    st.dataframe(pd.DataFrame(filas)[["Folio", "Fecha", "Hora", "Transcripción", "Revisar"]],
+                 hide_index=True, width="stretch", height=min(35 * len(filas) + 38, 420),
+                 column_config={"Folio": st.column_config.TextColumn(width=130),
+                                "Fecha": st.column_config.TextColumn(width=95),
+                                "Hora": st.column_config.TextColumn(width=60),
+                                "Transcripción": st.column_config.TextColumn(width="large"),
+                                "Revisar": st.column_config.TextColumn(
+                                    width="medium", help="Solo para mirar: no va al Excel.")})
 
-    def etiqueta(n):
-        f = filas[n]
-        marca = " ⚠️" if f["Revisar"] else ""
-        return f"Fila {n + 1} · {f['Folio']} · {f['Fecha']} {f['Hora']}{marca}"
-
-    n = st.selectbox("Fila", range(len(filas)), format_func=etiqueta, key=P + "fila")
-    n = min(n or 0, len(filas) - 1)
-    fila = filas[n]
-    izq, der = st.columns([1, 1], gap="medium")
-    with izq:
-        if fila["Revisar"]:
-            st.warning(f"Revisar: {fila['Revisar']}")
-        a, b, c = st.columns([2, 1.3, 1])
-        for col, campo in ((a, "Folio"), (b, "Fecha"), (c, "Hora")):
-            clave = f"{P}{campo}_{n}_{v}"
-            col.text_input(campo, value=fila[campo], key=clave,
-                           on_change=al_editar_texto, args=(n, campo, clave))
-        clave = f"{P}texto_{n}_{v}"
-        st.text_area("Transcripción", value=fila["Transcripción"], key=clave, height=560,
-                     on_change=al_editar_texto, args=(n, "Transcripción", clave))
-    with der:
-        paginas = pagina_probable(s, filas, n)
-        tanda = s["tandas"][fila["Tanda"] - 1]
-        # Página donde probablemente está la fila: por su folio, respecto del primero de la tanda.
-        folios = [tl.numero_folio(f["folio"]) for f in (tanda.resultado or {}).get("filas", [])]
-        folios = [x for x in folios if x is not None]
-        propio = tl.numero_folio(fila["Folio"])
-        desplazamiento = (propio - min(folios)) if folios and propio is not None else 0
-        sugerida = paginas[max(0, min(desplazamiento, len(tanda.paginas) - 1))]
-        pagina = st.pills("Página del PDF", paginas, default=sugerida, format_func=lambda p: f"Pág. {p + 1}",
-                          key=f"{P}pag_{n}_{v}")
-        pagina = sugerida if pagina is None else pagina
-        st.image(s["imagenes"][pagina], width="stretch")
-
-    # ------------------------------------------------------------ tabla
-    st.header("Tabla completa")
-    st.caption("También se puede corregir acá con doble clic en la celda. «Tanda» y «Revisar» son "
-               "solo para mirar: no van al Excel.")
-    clave = f"{P}tabla_{v}"
-    st.data_editor(
-        pd.DataFrame(filas), key=clave, hide_index=True, width="stretch", num_rows="fixed",
-        height=min(35 * len(filas) + 38, 500), on_change=al_editar_tabla, args=(clave,),
-        disabled=["Tanda", "Revisar"],
-        column_config={
-            "Folio": st.column_config.TextColumn(width=130),
-            "Fecha": st.column_config.TextColumn(width=95),
-            "Hora": st.column_config.TextColumn(width=60),
-            "Transcripción": st.column_config.TextColumn(width="large"),
-            "Tanda": st.column_config.NumberColumn(width=55, format="%d"),
-            "Revisar": st.column_config.TextColumn(width="medium"),
-        },
-    )
-
-    # ------------------------------------------------------------ exportar
     st.header("Exportar")
+    nombre = tl.nombre_excel(ss.get(P + "desde"), ss.get(P + "hasta"), filas)
+    if s["procesando"]:
+        st.button(f"⬇️ Descargar {nombre}", disabled=True, key=P + "descargar_off")
+        st.caption("Se puede descargar cuando termine la transcripción.")
+        return
     if res["tandas_error"] or res["tandas_pendientes"]:
         st.warning("Ojo: faltan tandas (" + ", ".join(res["tandas_error"] + res["tandas_pendientes"])
                    + "). El Excel sale sin esas páginas.")
     exportables = [{k: f[k] for k in tl.COLUMNAS} for f in filas]
-    nombre = st.text_input("Nombre del archivo", value=tl.nombre_archivo(exportables), key=f"{P}nombre_{v}")
-    nombre = re.sub(r'[\\/:*?"<>|]', "", nombre).strip().removesuffix(".xlsx") or "LG_transcripcion"
-    st.download_button(f"⬇️ Descargar {nombre}.xlsx", tl.exportar_excel(exportables), f"{nombre}.xlsx",
+    st.download_button(f"⬇️ Descargar {nombre}", tl.exportar_excel(exportables), nombre,
                        type="primary", key=P + "descargar")
     st.caption(f"Una hoja con Folio, Fecha, Hora y Transcripción · {res['filas']} filas · "
                f"{res['dudosos']} [?] · {res['ilegibles']} [ilegible] · "
-               f"tandas con error: {', '.join(res['tandas_error']) or 'ninguna'}.")
-
-    respuestas_crudas(tandas)
-
-
-def respuestas_crudas(tandas: list[tl.Tanda]) -> None:
-    st.header("Respuestas crudas del modelo")
-    st.caption("Lo que devolvió Claude en cada intento, tal cual, y el contexto que se le pasó.")
-    for i, t in enumerate(tandas):
-        with st.expander(f"{ICONO[t.estado]} Tanda {i + 1} · {t.nombre} · {len(t.intentos)} intento(s)"):
-            for k, intento in enumerate(t.intentos, 1):
-                costo = tl.costo(intento["uso"])
-                tokens = sum(u["entrada"] + u["cache_escritura"] + u["cache_lectura"] for u in intento["uso"])
-                salida = sum(u["salida"] for u in intento["uso"])
-                modelos = ", ".join(sorted({u["modelo"] for u in intento["uso"]})) or "—"
-                esfuerzos = {u.get("esfuerzo") for u in intento["uso"]} - {None}
-                if esfuerzos:
-                    modelos += " · esfuerzo " + ", ".join(sorted(esfuerzos))
-                st.markdown(f"**Intento {k}** · {modelos} · {tokens:,} tokens de entrada · {salida:,} de "
-                            f"salida · US\\$ {costo:.3f}".replace(",", "."))
-                if intento["error"]:
-                    st.error(intento["error"])
-                ctx = intento["contexto"]
-                st.caption(f"Contexto enviado: fecha «{ctx['ultima_fecha'] or '—'}»"
-                           + (" · con el último párrafo de la tanda anterior" if ctx["ultimo_parrafo"] else ""))
-                st.code(intento["cruda"] or "(vacía)", language="json", wrap_lines=True)
-    crudas = [{"tanda": i + 1, "paginas": [p + 1 for p in t.paginas], "estado": t.estado,
-               "intentos": t.intentos} for i, t in enumerate(tandas)]
-    st.download_button("⬇️ Descargar respuestas crudas (.json)",
-                       json.dumps(crudas, ensure_ascii=False, indent=2), "LG_respuestas_crudas.json",
-                       mime="application/json", key=P + "crudas")
+               f"tandas con error: {', '.join(res['tandas_error']) or 'ninguna'}. "
+               "El nombre se elige en ① Transcribir.")
 
 
 # ============================================================ ⚙️ Configuración
@@ -411,21 +442,22 @@ def al_probar_conexion() -> None:
                                     f"modelo {nombre} está disponible. (El crédito que queda se ve en la consola.)")
 
 
-def al_cambiar_esfuerzo() -> None:
+def al_guardar_ajustes() -> None:
     ajustes = tl.leer_ajustes()
-    ajustes["esfuerzo"] = ss[P + "esfuerzo"]
+    ajustes.update(modelo=ss[P + "modelo"], esfuerzo=ss[P + "esfuerzo"])
     tl.guardar_ajustes(ajustes)
-    ss[P + "msg"] = ("success", f"Esfuerzo guardado: {tl.ESFUERZOS[ss[P + 'esfuerzo']]}.")
+    ss[P + "msg_ajustes"] = f"Guardado: {tl.MODELOS[ajustes['modelo']].split(' (')[0]} con esfuerzo " \
+                            f"{tl.ESFUERZOS[ajustes['esfuerzo']].split(' (')[0].lower()}."
 
 
-def al_cambiar_modelo() -> None:
+def al_descartar_ajustes() -> None:
     ajustes = tl.leer_ajustes()
-    ajustes["modelo"] = ss[P + "modelo"]
-    tl.guardar_ajustes(ajustes)
-    ss[P + "msg"] = ("success", f"Modelo guardado: {ss[P + 'modelo']}.")
+    ss[P + "modelo"], ss[P + "esfuerzo"] = ajustes["modelo"], ajustes["esfuerzo"]
 
 
 def pantalla_configuracion():
+    if procesando():
+        avance(False)
     # Editores en letra monoespaciada: con Overpass los ` de los documentos se montan sobre la letra anterior.
     st.html("<style>.st-key-tlg_doc_instrucciones textarea, .st-key-tlg_doc_referencia textarea "
             "{ font-family: ui-monospace, Consolas, Menlo, monospace; font-size: .85rem; }</style>")
@@ -440,16 +472,25 @@ def pantalla_configuracion():
     ss.setdefault(P + "esfuerzo", ajustes["esfuerzo"])
     c1, c2 = st.columns(2)
     c1.selectbox("Modelo de Claude", list(tl.MODELOS), format_func=lambda m: f"{tl.MODELOS[m]} · {m}",
-                 key=P + "modelo", on_change=al_cambiar_modelo)
-    c2.selectbox("Esfuerzo", list(tl.ESFUERZOS), format_func=lambda e: tl.ESFUERZOS[e],
-                 key=P + "esfuerzo", on_change=al_cambiar_esfuerzo)
+                 key=P + "modelo")
+    c2.selectbox("Esfuerzo", list(tl.ESFUERZOS), format_func=lambda e: tl.ESFUERZOS[e], key=P + "esfuerzo")
+    sin_guardar = (ss[P + "modelo"], ss[P + "esfuerzo"]) != (ajustes["modelo"], ajustes["esfuerzo"])
+    b = st.columns([1, 1, 2], vertical_alignment="center")
+    b[0].button("💾 Guardar", key=P + "guardar_ajustes", type="primary", width="stretch",
+                on_click=al_guardar_ajustes)
+    b[1].button("↩️ Descartar cambios", key=P + "descartar_ajustes", width="stretch",
+                on_click=al_descartar_ajustes, disabled=not sin_guardar)
+    if sin_guardar:
+        b[2].markdown("✏️ **cambios sin guardar**")
+    if msg := ss.pop(P + "msg_ajustes", None):
+        st.success(msg)
     entrada, salida, _, _ = tl.PRECIOS[ss[P + "modelo"]]
     st.caption(f"Precio: US\\$ {entrada:g} por millón de tokens de entrada y US\\$ {salida:g} por millón de "
                f"salida. Las tandas son siempre de {tl.PAGINAS_POR_TANDA} páginas.")
     st.caption("**Esfuerzo**: cuánto analiza Claude cada página antes de responder. Con más esfuerzo lee "
                "la letra con más cuidado (menos [?] y menos errores en números), pero tarda más y cuesta "
-               "más, porque ese análisis se cobra como texto de salida. Se guarda y queda para las "
-               "próximas transcripciones.")
+               "más, porque ese análisis se cobra como texto de salida. Con «Guardar» queda para las "
+               "próximas transcripciones (una que ya está en curso sigue con lo que tenía).")
 
     st.header("Conexión con Claude")
     clave = os.getenv("ANTHROPIC_API_KEY", "").strip()
