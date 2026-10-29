@@ -8,7 +8,7 @@ App local (Streamlit) para:
 
 Módulos (menú a la izquierda):
 - **Cruce de Excels**: lo de arriba.
-- **Transcripciones del Libro de Guardia**: en desarrollo.
+- **Transcripciones del LG**: pasar a Excel el PDF escaneado del Libro de Guardia, con la IA de Claude (ver abajo).
 - **Asociación LG ↔ PCZ**: asociar a mano cada párrafo del Libro de Guardia con las novedades del PCZ (ver abajo).
 - **Concatenación**: pasar el CSV del reporte LibroNovedades a un Excel con una fila por novedad (ver abajo).
 
@@ -165,6 +165,98 @@ encabezado `numero,Descripción_Estado,fecha,hora,descrip` no está, el archivo 
 **Probarlo con datos inventados**: subí `tests/ejemplos/LibroNovedades_ejemplo.csv` (se regenera con
 `python tests/generar_ejemplo_concatenacion.py`).
 
+## Módulo: Transcripciones del LG (PDF escaneado → Excel)
+
+Transcribe el **Libro de Guardia de Señalamiento** (manuscrito, escaneado a PDF) a un Excel, usando la
+API de Claude (lee la letra a mano en las imágenes). **Usa internet y cuesta plata**: hace falta la
+clave de Anthropic en el archivo `.env` (`ANTHROPIC_API_KEY=...`, ver `.env.example`).
+
+Tiene 3 secciones arriba:
+
+**① Transcribir**
+1. Subí el PDF.
+2. **Nombre del documento final (Excel)**: «Transcripciones de [fecha] a [fecha].xlsx». Las fechas se
+   escriben seguidas (día, mes, año); con **Enter** se pasa a la segunda fecha y con otro **Enter**
+   se termina. La primera fecha también se le pasa a Claude como la del primer turno, por si la
+   primera página no la muestra. Si se dejan vacías, salen de la primera y la última fila.
+3. Se ve cuántas páginas tiene, en cuántas tandas se manda, el costo y el tiempo estimados.
+4. **▶️ Transcribir** y la app pasa sola a ②. Mientras transcribe, ① queda **en gris**: no se puede
+   subir otro PDF hasta que termine.
+   - El PDF se manda en **tandas de 3 páginas** (fijo), de a una y en orden, **de fondo**: se puede
+     navegar por la app sin cortar nada. **No recargues la página ni cierres la app**: se pierde todo
+     (si pasa, el proceso de fondo se frena solo, como mucho después de la tanda en curso, para no
+     gastar crédito en vano).
+   - Cada página va como **imagen JPEG de 2576 px** de lado largo (el máximo que aprovecha el modelo):
+     así la letra llega lo más nítida posible y la imagen que ves al revisar es exactamente la que
+     leyó Claude. (Mandar el PDF tal cual no mejora nada: la API igual lo convierte en imágenes, sin
+     dejar elegir la resolución.)
+   - Cada tanda lleva: las instrucciones, la referencia, las imágenes y la **continuidad** (última
+     fecha usada y el texto del último párrafo de la tanda anterior).
+   - La respuesta es un JSON. Si viene mal armado, se reintenta **una vez**; si vuelve a fallar, la
+     tanda queda con error y se sigue con las demás.
+   - **Unión**: si una tanda trae `continuacion_del_anterior`, ese texto se pega al final de la
+     última fila de la anterior y el folio pasa a «folio 18-19». Si una tanda terminó
+     `cortado_al_final` y la siguiente (ya transcripta) no trae continuación, esa fila queda **para
+     revisar** (⚠️).
+
+**② Revisar y exportar**
+- **Proceso**: mientras transcribe, «Tanda X de N» con una barra según el tiempo que falta (estimado
+  con lo que tardaron las tandas anteriores). Al terminar, «Listo». Si una tanda falló, aparece con
+  su motivo y **🔁 Reintentar**: como cada tanda usa el final de la anterior, avisa que la siguiente
+  puede quedar desalineada y ofrece «Reintentar solo esta» o «desde esta hasta el final».
+- **Resumen**: filas, cantidad de `[?]` y `[ilegible]`, tandas con error, filas para revisar y el
+  **costo real** (con los tokens, incluidos los reintentos).
+- **Comparar con el libro**: se elige un **folio** (al lado, su fecha para guiarse y cuántos `[?]` y
+  `[ilegible]` tiene); a la izquierda la transcripción de ese folio y a la derecha la página escaneada.
+  Las palabras que Claude no entendió bien (la palabra anterior a cada `[?]`, junto con el `[?]`)
+  aparecen **resaltadas en amarillo**, y los `[ilegible]` en **rojo claro**. Con **✏️ Corregir** se edita el texto y **💾 Guardar corrección**. Las páginas aparecen a medida que Claude las transcribe, así que se puede ir
+  revisando mientras trabaja. Si se corrige un párrafo cortado y después llega su continuación, la
+  continuación se agrega al final de lo corregido.
+  (El folio de cada página se deduce de los folios que leyó Claude en su tanda.)
+- **Vista previa del Excel**: todas las filas, solo para mirar.
+- **Exportar** (cuando termina): Excel con **una hoja y 4 columnas**: Folio (texto: «folio 18»,
+  «folio 18-19», «folio 01 (libro nuevo)»), Fecha (fecha DD/MM/AAAA), Hora (HH:MM) y Transcripción
+  (con los saltos de línea y *ajustar texto*), con el nombre elegido en ①.
+
+Lo transcripto vive **solo mientras la app está abierta** (igual que Asociación LG ↔ PCZ): si se
+recarga la página o se cierra la app, se pierde todo. Descargá el Excel antes. Si reintentás una
+tanda, se pierden las correcciones de esa tanda (las demás quedan).
+
+**⚙️ Configuración** (queda guardada)
+- **Modelo**: Claude Opus 5.5 (por defecto, el mejor) o Claude Sonnet 5.5 (la mitad de precio).
+  Modelo y esfuerzo se guardan con **💾 Guardar** (avisa si hay cambios sin guardar).
+- **Esfuerzo**: cuánto analiza Claude cada página antes de responder: bajo, medio, **alto** (por
+  defecto) o muy alto. Más esfuerzo = lee la letra con más cuidado, pero tarda y cuesta más (ese
+  análisis se cobra como salida). Se ve en ① Transcribir.
+- **Saldo de la API**: la API no deja consultar el saldo, así que se carga a mano el que muestra la
+  consola de Anthropic (platform.claude.com → Billing) y **💾 Guardar saldo**. Desde esa carga, la app
+  le va restando lo que cuesta cada tanda (incluidos los reintentos) y muestra el **saldo estimado**
+  acá y en el Resumen de ②; en ① avisa si no alcanza para el PDF. Solo cuenta lo que gasta esta app:
+  cada tanto conviene volver a copiar el saldo real. Se guarda en `config/transcripcion_lg/saldo.json`,
+  que **no va a git** (en el trabajo lo comparten las dos compus; la Mac tiene el suyo).
+- **Conexión con Claude**: muestra si la app encontró la clave en el `.env` y el botón **🔌 Probar la
+  conexión con Claude**, que comprueba la clave, que la red deje llegar a `api.anthropic.com` y que el
+  modelo esté disponible, sin gastar crédito. Si en plena transcripción falla la clave, la conexión o
+  el crédito, la app frena y explica qué pasó (las tandas que faltan se reintentan después).
+- **Instrucciones** (`PROMPT_Sistema_Transcripcion_LG.md`, va como *system prompt*; define el formato
+  del JSON) y **Documento de referencia** (`REFERENCIA_Transcripcion_LG.md`: jerga, letra de cada
+  escritor, pasos a nivel). Se editan en pantalla y se **💾 Guardan**. Al lado se ve cuántos tokens
+  tiene cada uno, con aviso si crece mucho (cada tanda lo manda entero; desde la 2.ª tanda sale más
+  barato por la caché).
+- **No hay historial de versiones**: al guardar, la versión nueva reemplaza a la anterior.
+  **⏮️ Restaurar original** vuelve a la versión inicial (pide confirmación: lo que había se pierde).
+- La app **nunca** cambia estos documentos sola.
+- Todo se guarda en `config/transcripcion_lg/` (`originales/` no se toca nunca, los documentos
+  vigentes y `ajustes.json` con el modelo y el esfuerzo). **Esa carpeta va a git**: para llevar los
+  cambios a la otra compu hay que subirlos a GitHub (ver la guía).
+
+**Costo aproximado** (a ojo): con Opus 5.5 y esfuerzo alto, unos US$ 0,08 por página (un PDF de 11
+páginas ≈ US$ 0,90; con esfuerzo medio ≈ US$ 0,70); con Sonnet 5.5, la mitad.
+
+**Probarlo con datos inventados**: `tests/ejemplos/LG_ejemplo.pdf` es un libro inventado de 7 páginas
+(se regenera con `python tests/generar_ejemplo_transcripcion.py`). Los PDFs reales **no se suben** a
+GitHub (`*.pdf` está en `.gitignore`). Tests: `python -m pytest`.
+
 ## Trabajar desde dos computadoras
 
 - Antes de empezar: `git pull`
@@ -177,10 +269,12 @@ El `.env` (tu clave) y los Excels quedan solo en cada máquina; hay que crear el
 ```
 app.py                  # punto de entrada y menú de módulos
 modulos/cruce.py        # pantalla: Cruce de Excels
-modulos/relleno_pdf.py  # pantalla: Transcripciones del Libro de Guardia (en desarrollo)
+modulos/transcripcion_lg.py   # pantalla: Transcripciones del LG (PDF escaneado → Excel con Claude)
+src/transcripcion_lg.py       # lógica: PDF → imágenes, tandas, llamada a Claude, unión, Excel
+config/transcripcion_lg/      # instrucciones y referencia de la transcripción (editables, van a git)
 src/cruce.py            # lógica del cruce por coincidencias
 modulos/asociacion_lg_pcz.py  # pantalla: Asociación LG ↔ PCZ
-src/ia.py               # llamadas a Claude (para el módulo de relleno)
+src/ia.py               # llamadas a Claude (relleno de columnas; hoy sin uso en el menú)
 src/asociacion_lg_pcz.py      # lógica de la asociación (fechas, candidatos, exportación)
 modulos/concatenacion.py      # pantalla: Concatenación (Libro de Novedades CSV → Excel)
 src/concatenacion.py          # lógica: lectura del CSV, agrupación, hora fin, Excel

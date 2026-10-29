@@ -38,7 +38,7 @@ st.sidebar.html(f"""
 # src/cruce.py; para volver a mostrarlo, descomentar esta línea:
 # st.Page("modulos/cruce.py", title="Cruce de Excels", icon=":material/join_inner:", default=True),
 paginas = [
-    st.Page("modulos/relleno_pdf.py", title="Transcripciones del LG", icon=":material/picture_as_pdf:"),
+    st.Page("modulos/transcripcion_lg.py", title="Transcripciones del LG", icon=":material/picture_as_pdf:"),
     st.Page("modulos/asociacion_lg_pcz.py", title="Asociación LG ↔ PCZ", icon=":material/link:"),
     st.Page("modulos/concatenacion.py", title="Concatenación", icon=":material/table_view:"),
 ]
