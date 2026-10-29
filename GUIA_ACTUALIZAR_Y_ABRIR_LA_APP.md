@@ -213,8 +213,8 @@ Hay dos tipos. Reglas para crearlos (también para las sesiones de Claude):
 
 | | Versión estable (`main`) | Probar una rama |
 |---|---|---|
-| Archivo | `abrir_app_windows.bat`, **dentro** de `ferrovias` (está en GitHub) | `probar_rama_<nombre>.bat`, **afuera**, en la carpeta `Claude` (no está en GitHub) |
-| Carpeta | `cd /d "%~dp0"` | `cd /d "%~dp0ferrovias"` |
+| Archivo | `abrir_app_windows.bat`, **dentro** de `ferrovias` (está en GitHub) | `probar_rama_<nombre>.bat`, **afuera**, en `Claude\accesos app` (no está en GitHub) |
+| Carpeta | `cd /d "%~dp0"` | `cd /d "%~dp0..\ferrovias"` (sube de `accesos app` a `Claude` y entra a `ferrovias`) |
 | Acceso directo | «App Ferrovías» | «PRUEBA <nombre>» |
 
 1. **Los de ramas van afuera de `ferrovias`.** Si estuvieran adentro, el `git checkout` los borra o
@@ -238,9 +238,9 @@ Modelo para probar una rama (cambiar `NOMBRE-DE-LA-RAMA` y el título):
 
 ```
 @echo off
-rem Prueba una rama (no es la version estable). Va en la carpeta Claude, al lado de ferrovias.
+rem Prueba una rama (no es la version estable). Va en Claude\accesos app (afuera de ferrovias).
 title Ferrovias - PRUEBA NOMBRE-DE-LA-RAMA
-cd /d "%~dp0ferrovias"
+cd /d "%~dp0..\ferrovias"
 git fetch
 git checkout NOMBRE-DE-LA-RAMA
 git pull
