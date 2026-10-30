@@ -19,6 +19,8 @@ st.sidebar.html(f"""
 /* Fondo general apenas degradado (de blanco a gris andén) */
 [data-testid="stAppViewContainer"] {{ background: linear-gradient(180deg, #FFFFFF 0%, #F4F3F2 45%, #ECEAE8 100%); }}
 [data-testid="stHeader"] {{ background: transparent; }}
+/* Contenido de todos los módulos al 90 % (el menú lateral queda igual) */
+[data-testid="stMainBlockContainer"] {{ zoom: 0.9; }}
 /* Botones principales con el mismo degradado */
 [data-testid="stBaseButton-primary"] {{ background: linear-gradient(180deg, #E61D24 0%, #B5131A 100%); border: none; }}
 [data-testid="stBaseButton-primary"]:hover {{ background: linear-gradient(180deg, #C8161D 0%, #95101A 100%); }}
