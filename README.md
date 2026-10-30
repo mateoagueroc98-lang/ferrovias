@@ -1,6 +1,10 @@
 # Ferrovías – Automatización de Excels
 
-> **Uso diario (actualizar y abrir la app en casa o en el trabajo):** ver [GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md](GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md).
+> **Abrir la app e instalarla:** [GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md](GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md).
+>
+> **Seguir el proyecto con Claude:** [COMO_TRABAJAR_EN_EL_PROYECTO.md](COMO_TRABAJAR_EN_EL_PROYECTO.md) y [PROMPTS_PARA_EMPEZAR.md](PROMPTS_PARA_EMPEZAR.md).
+>
+> El proyecto vive solo en la carpeta compartida del trabajo (ya no se usa GitHub).
 
 App local (Streamlit) para:
 - **Cruzar** dos o más Excels/CSVs por una o más columnas clave (tipo clave primaria), aunque las columnas tengan nombres distintos en cada archivo.
@@ -12,7 +16,7 @@ Módulos (menú a la izquierda):
 - **Asociación LG ↔ PCZ**: asociar a mano cada párrafo del Libro de Guardia con las novedades del PCZ (ver abajo).
 - **Concatenación**: pasar el CSV del reporte LibroNovedades a un Excel con una fila por novedad (ver abajo).
 
-Corre en tu compu y se abre en el navegador en `http://localhost:8501`. Los Excels **nunca** se suben a GitHub (están en `.gitignore`).
+Corre en tu compu y se abre en el navegador en `http://localhost:8501`. Los Excels, PDFs y la clave no entran al historial de git (están en `.gitignore`).
 
 ## Instalación y uso
 
@@ -247,22 +251,20 @@ tanda, se pierden las correcciones de esa tanda (las demás quedan).
   **⏮️ Restaurar original** vuelve a la versión inicial (pide confirmación: lo que había se pierde).
 - La app **nunca** cambia estos documentos sola.
 - Todo se guarda en `config/transcripcion_lg/` (`originales/` no se toca nunca, los documentos
-  vigentes y `ajustes.json` con el modelo y el esfuerzo). **Esa carpeta va a git**: para llevar los
-  cambios a la otra compu hay que subirlos a GitHub (ver la guía).
+  vigentes y `ajustes.json` con el modelo y el esfuerzo). Está en la carpeta compartida: las dos
+  compus usan la misma configuración.
 
 **Costo aproximado** (a ojo): con Opus 5.5 y esfuerzo alto, unos US$ 0,08 por página (un PDF de 11
 páginas ≈ US$ 0,90; con esfuerzo medio ≈ US$ 0,70); con Sonnet 5.5, la mitad.
 
 **Probarlo con datos inventados**: `tests/ejemplos/LG_ejemplo.pdf` es un libro inventado de 7 páginas
-(se regenera con `python tests/generar_ejemplo_transcripcion.py`). Los PDFs reales **no se suben** a
-GitHub (`*.pdf` está en `.gitignore`). Tests: `python -m pytest`.
+(se regenera con `python tests/generar_ejemplo_transcripcion.py`). Los PDFs reales no entran al historial
+de git (`*.pdf` está en `.gitignore`). Tests: `python -m pytest`.
 
 ## Trabajar desde dos computadoras
 
-- Antes de empezar: `git pull`
-- Al terminar: `git add . ; git commit -m "lo que hice" ; git push`
-
-El `.env` (tu clave) y los Excels quedan solo en cada máquina; hay que crear el `.env` en cada una.
+Las dos compus del trabajo usan la **misma carpeta** de `Y:`: no hay nada que sincronizar. Los cambios
+se ven al cerrar y volver a abrir la app. El `.env` (la clave) también es uno solo, en esa carpeta.
 
 ## Estructura
 

@@ -524,7 +524,7 @@ def pantalla_configuracion():
     if msg := ss.pop(P + "msg", None):
         getattr(st, msg[0])(msg[1])
     st.caption("Lo que se guarda acá queda en la carpeta `config/transcripcion_lg/` del proyecto: sigue "
-               "ahí aunque cierres la app. Para llevarlo a la otra compu, subilo a GitHub (ver la guía).")
+               "ahí aunque cierres la app. En el trabajo lo comparten las dos compus.")
 
     st.header("Modelo y esfuerzo")
     ajustes = tl.leer_ajustes()
@@ -570,7 +570,7 @@ def pantalla_configuracion():
                "(platform.claude.com → Billing) y guardalo acá. A partir de ahí la app le va restando lo que "
                "cuesta cada transcripción. Solo cuenta lo que gasta esta app (si usás la misma clave en otro "
                "lado, no se entera): cada tanto volvé a copiar el saldo real. Queda guardado en esta carpeta "
-               "(no va a GitHub): en el trabajo lo comparten las dos compus.")
+               "(fuera del historial de git): en el trabajo lo comparten las dos compus.")
 
     st.header("Conexión con Claude")
     clave = os.getenv("ANTHROPIC_API_KEY", "").strip()
