@@ -16,6 +16,25 @@ App local en **Python + Streamlit** para automatizar trabajo con Excels. Se abre
 
 Es usuario no técnico: explicale en español, simple y con pasos concretos.
 
+## Cómo trabajar con el usuario
+
+- El proyecto lo siguen **Mateo** (pasante) y **su jefe**, desde **cuentas de Claude distintas**. No
+  hay memoria compartida entre cuentas: todo lo que haga falta saber tiene que estar en este archivo,
+  en `COMO_TRABAJAR_EN_EL_PROYECTO.md` (guía para personas) o en la guía de abrir la app. Si el usuario
+  no dice quién es, no lo supongas: tratalo igual y usá lenguaje neutro.
+- **Cada sesión trabaja en su rama**, partiendo de `main` actualizado. Al terminar, pull request a
+  `main`. **Unir a `main` solo cuando el usuario lo pide** («pasalo a main», «unilo»).
+- **Siempre decir cómo probarlo** en las compus del trabajo: para una rama, pasarle el `.bat` para
+  `Claude\accesos app` según el modelo de la guía (sección «Accesos directos»), además de los
+  comandos. Nunca un comando para Windows sin la línea que abre Chrome.
+- Si hay **librerías nuevas**, avisar que en cada compu y usuario de Windows hay que correr una vez
+  `py -3.13 -m pip install --user -r requirements.txt` (en la Mac: `pip install -r requirements.txt`).
+- Las compus del trabajo **solo descargan** de GitHub (no tienen `git push` configurado): los cambios
+  los sube la sesión de Claude, no el usuario.
+- El repositorio es **público**: nada de datos reales (novedades, nombres de personas) en código,
+  tests ni documentación; los ejemplos son inventados.
+- Prompts para arrancar sesiones: `PROMPTS_PARA_EMPEZAR.md`.
+
 ## Estructura
 
 ```

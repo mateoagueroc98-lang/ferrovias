@@ -1,6 +1,8 @@
 # Ferrovías – Automatización de Excels
 
 > **Uso diario (actualizar y abrir la app en casa o en el trabajo):** ver [GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md](GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md).
+>
+> **Para seguir el proyecto con Claude** (desde cualquier cuenta): [COMO_TRABAJAR_EN_EL_PROYECTO.md](COMO_TRABAJAR_EN_EL_PROYECTO.md) y [PROMPTS_PARA_EMPEZAR.md](PROMPTS_PARA_EMPEZAR.md).
 
 App local (Streamlit) para:
 - **Cruzar** dos o más Excels/CSVs por una o más columnas clave (tipo clave primaria), aunque las columnas tengan nombres distintos en cada archivo.
