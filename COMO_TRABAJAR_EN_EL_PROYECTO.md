@@ -45,8 +45,14 @@ Los Excels, PDFs y la clave de Anthropic (`.env`) **nunca** se suben a GitHub.
 
 ## 4. Cómo se le piden cambios a Claude
 
-Se trabaja en **Claude Code** (claude.ai/code), eligiendo el repositorio
-`mateoagueroc98-lang/ferrovias` al crear la sesión.
+Hay **dos formas**; el proyecto es el mismo en las dos.
+
+- **A. Con GitHub** (como trabajó Mateo): Claude Code en la web (claude.ai/code), eligiendo el
+  repositorio `mateoagueroc98-lang/ferrovias`. Pasos abajo.
+- **B. Directo en la carpeta compartida** (cuando pase a la cuenta del jefe): Claude trabaja sobre la
+  carpeta `ferrovias` de `Y:`, sin GitHub. Ver la sección **4-B**.
+
+### 4-A. Con GitHub
 
 1. **Una conversación (sesión) por módulo.** Si querés tocar dos módulos, abrí dos sesiones.
 2. **Arrancá con un prompt** de [PROMPTS_PARA_EMPEZAR.md](PROMPTS_PARA_EMPEZAR.md): le da a Claude el
@@ -58,6 +64,20 @@ Se trabaja en **Claude Code** (claude.ai/code), eligiendo el repositorio
 6. Si está bien, decile **«pasalo a main»**. Recién ahí llega a la versión estable y a «App Ferrovías».
 7. Si se agregaron librerías nuevas, Claude te va a pasar un comando para instalarlas
    (una vez por compu y usuario de Windows).
+
+### 4-B. Directo en la carpeta compartida (sin GitHub)
+
+Se usa Claude **en la compu del trabajo** (app de escritorio de Claude, con Claude Code), abriendo la
+carpeta `Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias`.
+
+- **Los cambios son en vivo**: Claude edita la misma carpeta que usan las dos compus. No hay ramas
+  ni «pasalo a main»; lo que cambia, cambia para todos.
+- **Para ver un cambio**: cerrar la ventana negra y volver a abrir **«App Ferrovías»**.
+- **Puntos de restauración**: Claude guarda cada cambio con `git commit` (queda un historial en la
+  carpeta). Si algo se rompe, pedile «volvé al último punto que funcionaba».
+- **Avisá antes de cambiar algo** si otra persona está usando la app en ese momento.
+- Los accesos directos hacen `git pull`: si ya no hay GitHub y muestra un error, la app abre igual.
+- Arrancá con el prompt **«Carpeta compartida»** de [PROMPTS_PARA_EMPEZAR.md](PROMPTS_PARA_EMPEZAR.md).
 
 ### Palabras que vas a ver
 

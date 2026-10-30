@@ -34,6 +34,18 @@ Es usuario no técnico: explicale en español, simple y con pasos concretos.
 - El repositorio es **público**: nada de datos reales (novedades, nombres de personas) en código,
   tests ni documentación; los ejemplos son inventados.
 - Prompts para arrancar sesiones: `PROMPTS_PARA_EMPEZAR.md`.
+- **Dos formas de trabajar** (el proyecto es el mismo en las dos):
+  - **Con GitHub** (cuenta de Mateo, sesiones en la nube): rama por sesión, pull request, unir a
+    `main` solo si se pide, `.bat` de prueba en `accesos app`.
+  - **Directo en la carpeta compartida** (cuenta del jefe, Claude en la compu del trabajo, sin GitHub):
+    se edita la carpeta `Y:\...\Claude\ferrovias`, que usan **las dos compus a la vez**. No hay ramas,
+    pull requests ni `git push`. Antes de cambiar nada, `git status` y `git commit` de lo que haya (punto
+    de restauración); después de cada cambio que funcione, otro `git commit` con mensaje en español.
+    Correr los tests antes de dar algo por terminado. Avisar que para ver el cambio hay que **cerrar y
+    volver a abrir la app** (no vigila archivos). No cambiar de rama en esa carpeta. Si `git pull` de
+    los accesos directos da error porque ya no hay GitHub, no es grave: la app abre igual.
+  - Cómo darse cuenta: si `git remote -v` no muestra GitHub, o la sesión corre en la carpeta de `Y:`,
+    es el modo carpeta compartida.
 
 ## Estructura
 

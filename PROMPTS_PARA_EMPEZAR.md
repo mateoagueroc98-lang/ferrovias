@@ -1,10 +1,30 @@
 # Prompts para empezar una conversación con Claude
 
-Copiar el que corresponda como **primer mensaje** de una sesión nueva de Claude Code (con el
-repositorio `mateoagueroc98-lang/ferrovias` elegido) y completar lo que está entre `[corchetes]`.
-Claude ya lee `CLAUDE.md` solo; estos prompts le marcan qué hacer y quién le escribe.
+Copiar el que corresponda como **primer mensaje** de una sesión nueva de Claude Code y completar lo
+que está entre `[corchetes]`. Claude ya lee `CLAUDE.md` solo; estos prompts le marcan qué hacer y
+quién le escribe.
+
+- **Con GitHub** (sesión en la web con el repositorio `mateoagueroc98-lang/ferrovias`): usar los
+  prompts tal cual.
+- **Directo en la carpeta compartida** (sin GitHub): empezar con el prompt **«Carpeta compartida»** de
+  abajo y después pegar el del tema (módulo nuevo, módulo existente, etc.). En ese modo no hay ramas,
+  `.bat` de prueba ni «pasalo a main»: los cambios se ven al cerrar y volver a abrir la app.
 
 ---
+
+## Carpeta compartida (sin GitHub) — pegar primero
+
+```
+Hola, soy [nombre], de Ingeniería de Mantenimiento (RAMS) de Ferrovías. Trabajamos directo en la
+carpeta compartida Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias, sin
+GitHub: no hay ramas, pull requests ni git push. Esa carpeta la usan dos compus a la vez, así que
+los cambios son en vivo.
+
+Antes de empezar: leé CLAUDE.md (sección «Dos formas de trabajar»), COMO_TRABAJAR_EN_EL_PROYECTO.md
+y la guía GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md. Hacé git status y un git commit de lo que haya como
+punto de restauración. Después de cada cambio que funcione, corré los tests y hacé otro git commit
+con un mensaje en español. Decime qué cambiaste y recordame cerrar y volver a abrir la app para verlo.
+```
 
 ## Módulo nuevo
 
