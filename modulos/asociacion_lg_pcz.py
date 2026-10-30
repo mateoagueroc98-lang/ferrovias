@@ -7,9 +7,6 @@ import streamlit.components.v1 as components
 
 from src import asociacion_lg_pcz as a
 
-# Todo el contenido de este módulo al 90 % (el menú lateral y los otros módulos quedan igual)
-st.html("<style>[data-testid='stMainBlockContainer'] { zoom: 0.9; }</style>")
-
 st.title("Asociación LG ↔ PCZ")
 
 ss = st.session_state
