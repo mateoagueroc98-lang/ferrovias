@@ -1,51 +1,44 @@
 # Ferrovías – Automatización de Excels
 
 App local en **Python + Streamlit** para automatizar trabajo con Excels. Se abre en
-`http://localhost:8501` desde la Mac de casa y las compus del trabajo, sincronizadas por GitHub (comandos exactos en
-`GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md`):
-- **Casa – Mac**: `~/ferrovias`, con `.venv` (`source .venv/bin/activate` + `streamlit run app.py`).
-- **Trabajo – Windows**: `Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias`
-  (unidad de red), con Git. **Sin `.venv`**: librerías con `py -3.13 -m pip install --user`, la app
-  con `py -3.13 -m streamlit run app.py --server.headless true`. No pasarle comandos con `.venv`.
-  Esa carpeta la usan **dos compus** (la de Mateo y la del jefe): un `git checkout` en una cambia la
-  carpeta para las dos. Acceso directo del escritorio: `abrir_app_windows.bat` (siempre vuelve a `main`).
-  Para crear o cambiar accesos directos (`.bat`) seguir las reglas de la sección «Accesos directos» de
-  la guía: los de ramas van **afuera** de `ferrovias`, en `Claude\accesos app` (con
-  `cd /d "%~dp0..\ferrovias"`), `%~dp0` en vez de la ruta, sin tildes, `>NUL` (nunca
-  `/dev/null`), fin de línea CRLF.
+`http://localhost:8501`. **El proyecto vive solo en la carpeta compartida** del trabajo (ya no se usa
+GitHub ni la Mac): `Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias` (unidad de
+red, Windows). Comandos exactos en `GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md`.
+- **Sin `.venv`**: librerías con `py -3.13 -m pip install --user -r requirements.txt` (una vez por compu
+  y usuario de Windows), la app con `py -3.13 -m streamlit run app.py --server.headless true`. No pasarle
+  comandos con `.venv` ni de Mac.
+- Esa carpeta la usan **dos compus a la vez** (la de Mateo y la del jefe): todo cambio es en vivo para
+  las dos. Acceso directo del escritorio: `abrir_app_windows.bat` (arranca la app y abre Chrome; no
+  descarga nada). Para crear `.bat` seguir las reglas de la sección «Accesos directos» de la guía:
+  `%~dp0` en vez de la ruta, sin tildes, `>NUL` (nunca `/dev/null`), `pause` al final, fin de línea CRLF.
 
 Es usuario no técnico: explicale en español, simple y con pasos concretos.
 
 ## Cómo trabajar con el usuario
 
-- El proyecto lo siguen **Mateo** (pasante) y **su jefe**, desde **cuentas de Claude distintas**. No
-  hay memoria compartida entre cuentas: todo lo que haga falta saber tiene que estar en este archivo,
-  en `COMO_TRABAJAR_EN_EL_PROYECTO.md` (guía para personas) o en la guía de abrir la app. Si el usuario
-  no dice quién es, no lo supongas: tratalo igual y usá lenguaje neutro.
-- **Cada sesión trabaja en su rama**, partiendo de `main` actualizado. Al terminar, pull request a
-  `main`. **Unir a `main` solo cuando el usuario lo pide** («pasalo a main», «unilo»).
-- **Siempre decir cómo probarlo** en las compus del trabajo: para una rama, pasarle el `.bat` para
-  `Claude\accesos app` según el modelo de la guía (sección «Accesos directos»), además de los
-  comandos. Nunca un comando para Windows sin la línea que abre Chrome.
+- El proyecto lo siguen **Mateo** (pasante) y **su jefe**, desde **cuentas de Claude distintas**, cada
+  uno con Claude Code en su compu, sobre la **misma carpeta**. No hay memoria compartida entre cuentas:
+  todo lo que haga falta saber tiene que estar en este archivo, en `COMO_TRABAJAR_EN_EL_PROYECTO.md`
+  (guía para personas) o en la guía. Si el usuario no dice quién es, no lo supongas: usá lenguaje neutro.
+- **Sin GitHub**: no hay ramas, pull requests ni `git push`/`git pull`. Git se usa **solo local**, como
+  historial de **puntos de restauración**:
+  - Al empezar: `git status`; si hay cambios sin guardar, `git commit` de lo que haya (preguntar si
+    no son de esta sesión).
+  - Después de cada cambio que funcione (tests pasando): `git commit` con mensaje en español.
+  - Para deshacer: volver al último commit que funcionaba (mostrarle al usuario qué se pierde y
+    confirmar). No reescribir el historial ni cambiar de rama: siempre `main`.
+  - Si Git pide nombre y email, configurarlos solo para esta carpeta (`git config user.name` /
+    `user.email`) con los datos que dé el usuario.
+- **Una sola sesión cambiando la carpeta a la vez.** Si `git status` muestra cambios inesperados o hay
+  un `.git/index.lock`, puede haber otra sesión trabajando: avisar antes de seguir.
+- **Correr los tests** (`py -3.13 -m pytest`) antes de dar algo por terminado, y **probar la pantalla**
+  si se cambió la interfaz (capturas si el entorno lo permite).
+- Después de un cambio, recordar: **cerrar y volver a abrir la app** para verlo (no vigila archivos), y
+  que la otra compu lo ve igual al reabrir.
 - Si hay **librerías nuevas**, avisar que en cada compu y usuario de Windows hay que correr una vez
-  `py -3.13 -m pip install --user -r requirements.txt` (en la Mac: `pip install -r requirements.txt`).
-- Las compus del trabajo **solo descargan** de GitHub (no tienen `git push` configurado): los cambios
-  los sube la sesión de Claude, no el usuario.
-- El repositorio es **público**: nada de datos reales (novedades, nombres de personas) en código,
-  tests ni documentación; los ejemplos son inventados.
-- Prompts para arrancar sesiones: `PROMPTS_PARA_EMPEZAR.md`.
-- **Dos formas de trabajar** (el proyecto es el mismo en las dos):
-  - **Con GitHub** (cuenta de Mateo, sesiones en la nube): rama por sesión, pull request, unir a
-    `main` solo si se pide, `.bat` de prueba en `accesos app`.
-  - **Directo en la carpeta compartida** (cuenta del jefe, Claude en la compu del trabajo, sin GitHub):
-    se edita la carpeta `Y:\...\Claude\ferrovias`, que usan **las dos compus a la vez**. No hay ramas,
-    pull requests ni `git push`. Antes de cambiar nada, `git status` y `git commit` de lo que haya (punto
-    de restauración); después de cada cambio que funcione, otro `git commit` con mensaje en español.
-    Correr los tests antes de dar algo por terminado. Avisar que para ver el cambio hay que **cerrar y
-    volver a abrir la app** (no vigila archivos). No cambiar de rama en esa carpeta. Si `git pull` de
-    los accesos directos da error porque ya no hay GitHub, no es grave: la app abre igual.
-  - Cómo darse cuenta: si `git remote -v` no muestra GitHub, o la sesión corre en la carpeta de `Y:`,
-    es el modo carpeta compartida.
+  `py -3.13 -m pip install --user -r requirements.txt`.
+- Ejemplos y tests siempre con **datos inventados** (`tests/ejemplos/`), nunca datos reales.
+- Prompts para arrancar conversaciones: `PROMPTS_PARA_EMPEZAR.md`.
 
 ## Estructura
 
@@ -128,11 +121,9 @@ CSV inventado en `tests/ejemplos/LibroNovedades_ejemplo.csv`.
   `#E31B22` a `#9E1219` (menú y botones principales), fondo andén `#F4F3F2`, texto grafito `#1C1A19`;
   estados con colores de señal: verde `#2F7D4A`, amarillo `#C98A00`/`#FFE27A` (resaltado), rojo error
   `#B3261E`. Para cambios visuales usar la skill `frontend-design`.
-- Nunca subir datos ni secretos: `.xlsx`, `.csv`, `.pdf` y `.env` están en `.gitignore`. La clave de
-  Anthropic va en `.env` (`ANTHROPIC_API_KEY`), ver `.env.example`.
+- Datos y secretos fuera del historial de git: `.xlsx`, `.csv`, `.pdf` y `.env` están en `.gitignore`.
+  La clave de Anthropic va en `.env` (`ANTHROPIC_API_KEY`), ver `.env.example`.
 - Dependencias nuevas → `requirements.txt` y avisar al usuario que corra
-  `pip install -r requirements.txt`.
-- Antes de subir cambios de interfaz: correr la app y probarla con Excels de ejemplo inventados
-  (Playwright + Chromium preinstalado) y mostrarle capturas al usuario.
-- Ramas: `main` es la versión estable. Cada sesión trabaja en su rama y los cambios entran a
-  `main` por pull request.
+  `py -3.13 -m pip install --user -r requirements.txt` en cada compu.
+- Antes de dar por terminado un cambio de interfaz: correr la app y probarla con ejemplos inventados
+  (con Playwright si está disponible) y mostrarle capturas al usuario.

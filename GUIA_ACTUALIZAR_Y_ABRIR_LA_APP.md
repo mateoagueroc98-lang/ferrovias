@@ -1,132 +1,33 @@
-# Guía: actualizar el proyecto y abrir la app
+# Guía: abrir la app y mantenerla
 
-Pasos para traer los últimos cambios de GitHub y usar la app en cada computadora.
-
-- [Casa – Mac](#casa--mac)
-- [Trabajo – Windows](#trabajo--windows)
-
----
-
-## Casa – Mac
-
-Todo se hace en la app **Terminal** (`Cmd + Espacio`, escribir `Terminal`, Enter).
-
-### Uso de todos los días
-
-Copiar y pegar de a una línea:
-
-```bash
-cd ~/ferrovias
-git checkout main
-git pull
-source .venv/bin/activate
-streamlit run app.py
-```
-
-Qué hace cada línea:
-
-| Comando | Para qué sirve |
-|---|---|
-| `cd ~/ferrovias` | Entra a la carpeta del proyecto (`/Users/mateoaguero/ferrovias`). La línea tiene que terminar en `ferrovias %`. |
-| `git checkout main` | Se asegura de estar en `main`, la versión estable. |
-| `git pull` | Trae de GitHub los últimos cambios. |
-| `source .venv/bin/activate` | Activa el Python del proyecto. La línea empieza con `(.venv)`. |
-| `streamlit run app.py` | Abre la app. |
-
-- La app se abre sola en el navegador en `http://localhost:8501` (si no, pegar esa dirección).
-- **No cerrar la Terminal** mientras se usa la app: corre ahí.
-- Para apagarla: `Ctrl + C` en la Terminal (Control, no Cmd).
-- No tocar el botón **Deploy** de la app (la publicaría en internet).
-
-### Si después de `git pull` aparece un error de que falta algo
-
-Se agregó alguna librería nueva. Con el `(.venv)` activo:
-
-```bash
-pip install -r requirements.txt
-```
-
-y volver a correr `streamlit run app.py`.
-
-### Probar cambios que todavía no están en `main`
-
-Cuando una sesión de Claude Code está trabajando en un módulo, sus cambios quedan en una
-**rama** propia (por ejemplo `claude/modulo-lg-pcz-asociacion-...`) hasta que se unen a `main`.
-Para probarlos antes:
-
-```bash
-cd ~/ferrovias
-git fetch
-git checkout NOMBRE-DE-LA-RAMA
-git pull
-source .venv/bin/activate
-streamlit run app.py
-```
-
-El nombre de la rama se ve en GitHub, en la pestaña **Pull requests** o en el menú de ramas.
-Para volver a la versión estable: `git checkout main`.
-
-### Empezar de cero en el módulo Asociación LG ↔ PCZ
-
-La app ya no guarda asociaciones: alcanza con **recargar la página** (o cerrar y volver a abrir la
-app). Ojo: lo que no hayas descargado en **3. Exportar** se pierde.
-
-### Instalación (solo la primera vez en esta Mac)
-
-> Ya está hecha. Queda anotada por si hay que rehacerla.
-
-1. **Git**: ya viene; se comprueba con `git --version`.
-2. **Python 3.13** desde https://www.python.org/downloads/macos/ (no usar 3.15: algunas
-   librerías todavía no funcionan). Después de instalar, doble clic en
-   *Aplicaciones → Python 3.13 → Install Certificates.command*.
-3. En la Terminal:
-
-   ```bash
-   cd ~
-   git clone https://github.com/mateoagueroc98-lang/ferrovias.git
-   cd ferrovias
-   python3.13 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-   En esta Mac el comando `python3` es la versión vieja (3.9) que trae el sistema: por eso
-   se usa `python3.13` para crear el `.venv`. Una vez activado, `python` ya es el correcto.
-
-4. *(Opcional, para módulos con IA)*: `cp .env.example .env` y `open -e .env` para pegar la
-   clave de Anthropic.
-
----
-
-## Trabajo – Windows
-
-La carpeta del proyecto está en la unidad de red y está conectada a GitHub con Git:
+El proyecto vive **solo en la carpeta compartida** del trabajo (ya no se usa GitHub):
 
 ```
 Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias
 ```
 
-La usan **dos compus**: la de Mateo y la del jefe. Como `Y:` es compartido, es **la misma carpeta**
-para las dos: el proyecto no se baja de nuevo en cada compu, pero Python, Git y las librerías se
-instalan en cada usuario de Windows.
+La usan **dos compus a la vez** (la de Mateo y la del jefe). Lo que se cambia en esa carpeta,
+cambia para las dos: no hay que «actualizar» ni descargar nada.
 
-> **Ojo:** si una compu cambia de rama (`git checkout ...`), la carpeta cambia **para las dos**.
-> El acceso directo siempre vuelve a `main`. Para el uso normal (siempre en `main`) no hay problema,
-> y la app puede estar abierta en las dos compus a la vez.
+---
 
-### Uso de todos los días
+## Uso de todos los días
 
-**Con doble clic:** el archivo `abrir_app_windows.bat` (en la carpeta `ferrovias`) hace todo lo de
-abajo. Para tenerlo en el escritorio: clic derecho en el archivo → **Enviar a** → **Escritorio
-(crear acceso directo)**. Para cerrar la app: `Ctrl + C` en la ventana negra (o cerrarla).
+**Doble clic en el acceso directo «App Ferrovías»** del escritorio. Abre una ventana negra, arranca
+la app y a los 20 segundos la abre en Chrome (`http://localhost:8501`).
 
-**A mano:** abrir la ventana negra (tecla Windows → escribir `cmd` → Enter), en cualquier carpeta, y pegar
-el bloque entero:
+- Si Chrome muestra «No se puede acceder a este sitio», esperar unos segundos y apretar **F5**:
+  desde la unidad de red la app tarda en arrancar.
+- **No cerrar la ventana negra** mientras se usa la app: corre ahí. Para apagarla: cerrarla o
+  `Ctrl + C`.
+- **Para ver un cambio** que hizo Claude: cerrar la ventana negra y volver a abrir «App Ferrovías»
+  (la app no se da cuenta sola de los cambios).
+- No tocar el botón **Deploy** de la app (la publicaría en internet).
+
+**A mano** (si el acceso directo no está): ventana negra (tecla Windows → `cmd` → Enter) y pegar:
 
 ```
 cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
-git checkout main
-git pull
 start "" cmd /c "timeout /t 20 >NUL & start chrome http://localhost:8501"
 py -3.13 -m streamlit run app.py --server.headless true
 ```
@@ -134,133 +35,69 @@ py -3.13 -m streamlit run app.py --server.headless true
 | Línea | Para qué sirve |
 |---|---|
 | `cd /d "Y:\...\ferrovias"` | Entra a la carpeta del proyecto, desde donde se esté. |
-| `git checkout main` | Se asegura de estar en `main`, la versión estable. |
-| `git pull` | Trae de GitHub los últimos cambios. |
 | `start "" cmd /c "timeout ... chrome ..."` | Espera 20 segundos a que arranque la app y la abre en Chrome. |
 | `py -3.13 -m streamlit run ...` | Abre la app (no se usa `.venv`: las librerías están instaladas en el usuario). |
 
-- Si Chrome muestra «No se puede acceder a este sitio», esperar unos segundos y apretar **F5**:
-  desde la unidad de red la app tarda en arrancar.
-- **No cerrar la ventana negra** mientras se usa la app: corre ahí. Para apagarla: `Ctrl + C`.
-- No tocar el botón **Deploy** de la app (la publicaría en internet).
+### Si aparece un error de que falta algo
 
-### Si después de `git pull` aparece un error de que falta algo
-
-Se agregó alguna librería nueva (dice `No module named ...`). En la ventana negra:
+La ventana negra o la página dicen `No module named ...`: se agregó una librería nueva. Una vez en
+**cada compu y usuario de Windows**:
 
 ```
 cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
 py -3.13 -m pip install --user -r requirements.txt
 ```
 
-y volver a pegar el bloque de todos los días.
-
-### Probar cambios que todavía no están en `main`
-
-```
-cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
-git fetch
-git checkout NOMBRE-DE-LA-RAMA
-git pull
-start "" cmd /c "timeout /t 20 >NUL & start chrome http://localhost:8501"
-py -3.13 -m streamlit run app.py --server.headless true
-```
-
-Para volver a la versión estable, usar de nuevo el bloque de todos los días (empieza con
-`git checkout main`).
+y volver a abrir «App Ferrovías».
 
 ### Empezar de cero en el módulo Asociación LG ↔ PCZ
 
-Igual que en la Mac: recargar la página o volver a abrir la app (no hay nada guardado que borrar).
+Recargar la página o volver a abrir la app (no hay nada guardado que borrar). Lo que no se haya
+descargado en **3. Exportar** se pierde.
 
-### Llevar la configuración de «Transcripciones del LG» a la otra compu
+### Configuración de «Transcripciones del LG»
 
-Lo que se guarda en ⚙️ Configuración (instrucciones, referencia, modelo y esfuerzo) queda en la carpeta
-`config\transcripcion_lg` del proyecto. Para que llegue a la Mac hay que subirlo a GitHub.
+Lo que se guarda en ⚙️ Configuración (instrucciones, referencia, modelo, saldo) queda en la carpeta
+del proyecto, así que **las dos compus lo comparten** automáticamente. Conviene editarlo en una sola
+compu a la vez.
 
-**Una sola vez por usuario de Windows** (en esta compu nunca se subió nada: Git no sabe quién sos).
-En la ventana negra, con tu nombre y el mail de tu cuenta de GitHub:
+---
 
-```
-git config --global user.name "Tu Nombre"
-git config --global user.email "tu-mail@ejemplo.com"
-```
+## Trabajar con Claude en la carpeta
 
-**Cada vez que quieras subir la configuración** (con la app cerrada y la carpeta en `main`, o sea,
-después de haber usado el acceso directo del escritorio):
+Ver [COMO_TRABAJAR_EN_EL_PROYECTO.md](COMO_TRABAJAR_EN_EL_PROYECTO.md). En resumen: Claude (app de
+escritorio, con Claude Code) abre la carpeta `ferrovias` de `Y:` y la edita directamente. Guarda
+**puntos de restauración** con Git (un historial que queda dentro de la carpeta, en `.git`) para poder
+volver atrás si algo se rompe. **Una sola sesión de Claude cambiando la carpeta a la vez.**
 
-```
-cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
-git add config/transcripcion_lg
-git commit -m "Transcripciones del LG: actualizo la configuración"
-git push
-```
+---
 
-- La **primera vez** que hagas `git push` se abre una ventana para **iniciar sesión en GitHub**: elegir
-  *Sign in with your browser* y entrar con tu cuenta (la dueña del repositorio). Después queda
-  recordado y no lo vuelve a pedir.
-- Si `git push` dice *rejected* / *fetch first*: hay cambios nuevos en GitHub. Correr `git pull` y
-  después otra vez `git push`.
-- En la Mac llega con el `git pull` de todos los días. Al revés es igual: en la Mac los mismos
-  `git add` / `git commit` / `git push` desde `~/ferrovias`.
-- **Editar la configuración en un solo lugar a la vez.** Si se cambia el mismo documento en las dos
-  compus sin subirlo, `git pull` va a dar error (*conflict* o *would be overwritten*). Si pasa,
-  avisale a Claude antes de tocar nada.
+## Accesos directos (archivos `.bat`)
 
-### Accesos directos (archivos `.bat`)
+- `abrir_app_windows.bat` (dentro de `ferrovias`) abre la app. En el escritorio: clic derecho en el
+  archivo → **Enviar a** → **Escritorio (crear acceso directo)** y renombrarlo «App Ferrovías».
+- Si hace falta otro `.bat`, reglas:
+  1. Nunca escribir la ruta de `Y:` adentro (tiene tildes y espacios): usar `%~dp0`, la carpeta
+     donde está el `.bat`. Si va en `Claude\accesos app`, entrar con `cd /d "%~dp0..\ferrovias"`.
+  2. Solo letras sin tildes en el contenido.
+  3. Comandos de Windows: `>NUL`, nunca `>/dev/null` (si no, la espera no se hace y Chrome se abre
+     antes que la app).
+  4. Terminar con `pause`, para que la ventana no se cierre si hay un error.
+  5. Fin de línea de Windows (CRLF). Guardarlos desde el Bloc de notas con el nombre **entre
+     comillas** (`"nombre.bat"`); si no, Windows agrega `.txt`.
+  6. Uno abierto a la vez: todos usan `localhost:8501`.
+- Los accesos «PRUEBA ...» de `accesos app` eran para probar ramas de GitHub: **ya no sirven**
+  (borrarlos, junto con sus accesos del escritorio).
 
-Hay dos tipos. Reglas para crearlos (también para las sesiones de Claude):
+---
 
-| | Versión estable (`main`) | Probar una rama |
-|---|---|---|
-| Archivo | `abrir_app_windows.bat`, **dentro** de `ferrovias` (está en GitHub) | `probar_rama_<nombre>.bat`, **afuera**, en `Claude\accesos app` (no está en GitHub) |
-| Carpeta | `cd /d "%~dp0"` | `cd /d "%~dp0..\ferrovias"` (sube de `accesos app` a `Claude` y entra a `ferrovias`) |
-| Acceso directo | «App Ferrovías» | «PRUEBA <nombre>» |
+## Instalación (solo la primera vez en una compu o usuario de Windows)
 
-1. **Los de ramas van afuera de `ferrovias`.** Si estuvieran adentro, el `git checkout` los borra o
-   los cambia mientras se ejecutan y el acceso directo deja de andar.
-2. **Nunca escribir la ruta de `Y:` adentro del `.bat`**: tiene tildes y espacios. Usar `%~dp0`
-   (la carpeta donde está el `.bat`).
-3. **Solo letras sin tildes** en el contenido (`Asociacion`, no `Asociación`).
-4. **Comandos de Windows, no de Mac/Linux**: para descartar texto se usa `>NUL`, nunca `>/dev/null`
-   (si no, la espera no se hace y Chrome se abre antes que la app).
-5. **Siempre el mismo orden**: carpeta → `git fetch` (solo en ramas) → `git checkout` → `git pull` →
-   `pip install` (solo en ramas, por si agregaron librerías) → abrir Chrome a los 20 segundos → app →
-   `pause` (para que la ventana no se cierre si hay un error).
-6. **Guardarlos desde el Bloc de notas** con el nombre **entre comillas** (`"probar_rama_x.bat"`);
-   si no, Windows agrega `.txt`. El ícono correcto es una ventanita con engranaje.
-7. **Uno abierto a la vez**: antes de abrir otro, cerrar la ventana negra del anterior (los dos usan
-   `localhost:8501`).
-8. **La carpeta es compartida con la compu del jefe**: al terminar de probar una rama, abrir una vez
-   «App Ferrovías» para dejar la carpeta en `main`.
-
-Modelo para probar una rama (cambiar `NOMBRE-DE-LA-RAMA` y el título):
-
-```
-@echo off
-rem Prueba una rama (no es la version estable). Va en Claude\accesos app (afuera de ferrovias).
-title Ferrovias - PRUEBA NOMBRE-DE-LA-RAMA
-cd /d "%~dp0..\ferrovias"
-git fetch
-git checkout NOMBRE-DE-LA-RAMA
-git pull
-py -3.13 -m pip install --user -q -r requirements.txt
-start "" cmd /c "timeout /t 20 >NUL & start chrome http://localhost:8501"
-py -3.13 -m streamlit run app.py --server.headless true
-pause
-```
-
-Para crear el acceso directo: clic derecho en el `.bat` → **Enviar a** → **Escritorio (crear acceso
-directo)**, y renombrarlo.
-
-### Instalación (solo la primera vez en esta compu)
-
-> Ya está hecha en la compu de Mateo y en la del jefe. Queda anotada por si hay que rehacerla
-> (otra compu u otro usuario de Windows: Python, librerías y configuración de Git son de cada usuario).
-> En una compu nueva **se saltea el paso 4**: la carpeta en `Y:` ya existe.
+> Ya está hecha en la compu de Mateo y en la del jefe. Python, librerías y configuración de Git son
+> de cada usuario de Windows; la carpeta de `Y:` ya existe y no se copia.
 >
 > Si un instalador pide **usuario y contraseña de administrador**, cancelarlo y usar la opción sin
-> permisos que se indica en cada paso.
+> permisos de cada paso.
 
 1. **Python 3.13**: bajar el *Python Install Manager* de https://www.python.org/downloads/windows/.
    Si la configuración avisa por los *alias de ejecución de aplicaciones*, activar
@@ -268,12 +105,13 @@ directo)**, y renombrarlo.
    (si `py -3.13 --version` dice *No runtime installed that matches 3.13*, falta este comando).
    - *Sin permisos de administrador:* bajar el **"Windows installer (64-bit)"** de Python 3.13,
      **destildar** *"Use admin privileges when installing py.exe"* y tildar *"Add python.exe to PATH"*.
-2. **Git** desde https://git-scm.com/download/win (opciones por defecto).
+2. **Git** (lo usa Claude para los puntos de restauración) desde https://git-scm.com/download/win
+   (opciones por defecto).
    - *Sin permisos de administrador:* bajar **"Git for Windows Portable"**, descomprimirlo en
      `%USERPROFILE%\PortableGit` y agregar `%USERPROFILE%\PortableGit\cmd` al **Path** en
      *"Editar las variables de entorno de esta cuenta"*. Abrir una ventana negra nueva y probar
      `git --version`.
-3. En esta compu la carpeta personal (`HOME`) apunta a `Y:\`, donde no se puede escribir. Para que
+3. En estas compus la carpeta personal (`HOME`) apunta a `Y:\`, donde no se puede escribir. Para que
    Git guarde su configuración en `C:` y no desconfíe de la unidad de red («dubious ownership»):
 
    ```
@@ -286,20 +124,23 @@ directo)**, y renombrarlo.
    git config --global --add safe.directory "*"
    ```
 
-4. Bajar el proyecto: abrir `cmd` en la carpeta `Claude` y
+4. Instalar las librerías (en el usuario, sin `.venv`: en la unidad de red sería lento):
 
    ```
-   git clone https://github.com/mateoagueroc98-lang/ferrovias.git
-   ```
-
-5. Instalar las librerías (en el usuario, sin `.venv`: en la unidad de red sería lento):
-
-   ```
-   cd ferrovias
+   cd /d "Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias"
    py -3.13 -m pip install --user -r requirements.txt
    ```
 
-6. *(Opcional, para módulos con IA)*: `copy .env.example .env` y `notepad .env` para pegar la
-   clave de Anthropic. (El `.env` queda en la carpeta compartida: sirve para las dos compus.)
-7. **Acceso directo:** clic derecho en `abrir_app_windows.bat` → **Enviar a** → **Escritorio
+5. *(Para Transcripciones del LG)*: si no existe el archivo `.env` en la carpeta,
+   `copy .env.example .env` y `notepad .env` para pegar la clave de Anthropic. Como la carpeta es
+   compartida, el mismo `.env` sirve para las dos compus.
+6. **Acceso directo:** clic derecho en `abrir_app_windows.bat` → **Enviar a** → **Escritorio
    (crear acceso directo)**.
+
+---
+
+## La Mac de casa
+
+La copia de `~/ferrovias` en la Mac **ya no se actualiza** (se sincronizaba por GitHub). Para usar
+la versión actual en la Mac habría que copiarle la carpeta del trabajo (por ejemplo con un pendrive)
+y abrirla con `source .venv/bin/activate` + `streamlit run app.py`.

@@ -1,74 +1,53 @@
 # Prompts para empezar una conversación con Claude
 
-Copiar el que corresponda como **primer mensaje** de una sesión nueva de Claude Code y completar lo
-que está entre `[corchetes]`. Claude ya lee `CLAUDE.md` solo; estos prompts le marcan qué hacer y
-quién le escribe.
-
-- **Con GitHub** (sesión en la web con el repositorio `mateoagueroc98-lang/ferrovias`): usar los
-  prompts tal cual.
-- **Directo en la carpeta compartida** (sin GitHub): empezar con el prompt **«Carpeta compartida»** de
-  abajo y después pegar el del tema (módulo nuevo, módulo existente, etc.). En ese modo no hay ramas,
-  `.bat` de prueba ni «pasalo a main»: los cambios se ven al cerrar y volver a abrir la app.
+Copiar el que corresponda como **primer mensaje** de una conversación nueva de Claude Code (app de
+escritorio, con la carpeta `ferrovias` de `Y:` abierta) y completar lo que está entre `[corchetes]`.
+Claude ya lee `CLAUDE.md` solo; estos prompts le marcan qué hacer y quién le escribe.
 
 ---
-
-## Carpeta compartida (sin GitHub) — pegar primero
-
-```
-Hola, soy [nombre], de Ingeniería de Mantenimiento (RAMS) de Ferrovías. Trabajamos directo en la
-carpeta compartida Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias, sin
-GitHub: no hay ramas, pull requests ni git push. Esa carpeta la usan dos compus a la vez, así que
-los cambios son en vivo.
-
-Antes de empezar: leé CLAUDE.md (sección «Dos formas de trabajar»), COMO_TRABAJAR_EN_EL_PROYECTO.md
-y la guía GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md. Hacé git status y un git commit de lo que haya como
-punto de restauración. Después de cada cambio que funcione, corré los tests y hacé otro git commit
-con un mensaje en español. Decime qué cambiaste y recordame cerrar y volver a abrir la app para verlo.
-```
 
 ## Módulo nuevo
 
 ```
 Hola, soy [nombre], de Ingeniería de Mantenimiento (RAMS) de Ferrovías. Vamos a crear un módulo
-nuevo en la app. Antes de empezar, leé CLAUDE.md, COMO_TRABAJAR_EN_EL_PROYECTO.md y la guía
-GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md, y seguí sus reglas (un módulo por sesión, textos en español,
-paleta de Ferrovías, nada de datos reales en GitHub).
+nuevo en la app. Trabajamos directo en esta carpeta compartida (la usan dos compus a la vez, sin
+GitHub). Antes de empezar, leé CLAUDE.md, COMO_TRABAJAR_EN_EL_PROYECTO.md y
+GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md, y seguí sus reglas.
 
 Nombre del módulo en el menú: [nombre]
 Qué tiene que hacer: [explicación con ejemplos]
 Qué archivo entra: [Excel / CSV / PDF, de dónde sale, qué columnas tiene]
 Qué tiene que salir: [qué Excel, qué columnas, en qué orden]
 
-Si algo no queda claro, preguntame antes de programar. Armá un ejemplo inventado para probarlo,
-mostrame capturas y, cuando esté para probar, pasame el .bat para la carpeta "accesos app".
-No lo pases a main hasta que te lo pida.
+Si algo no queda claro, preguntame antes de programar. Antes de cambiar nada, guardá un punto de
+restauración con git; armá un ejemplo inventado para probarlo, corré los tests y mostrame capturas.
+Cuando esté, guardá otro punto de restauración y decime cómo verlo en la app.
 ```
 
 ## Seguir con un módulo que ya existe
 
 ```
 Hola, soy [nombre]. Vamos a seguir con el módulo [Transcripciones del LG / Asociación LG ↔ PCZ /
-Concatenación]. Leé CLAUDE.md, COMO_TRABAJAR_EN_EL_PROYECTO.md y la parte de ese módulo en el
-README antes de empezar, y respetá sus reglas.
+Concatenación]. Trabajamos directo en esta carpeta compartida (dos compus, sin GitHub). Leé
+CLAUDE.md, COMO_TRABAJAR_EN_EL_PROYECTO.md y la parte de ese módulo en el README antes de empezar.
 
 Lo que quiero cambiar: [explicación, con un ejemplo o captura]
 
-Trabajá en una rama nueva partiendo de main actualizado. Mostrame capturas, pasame el .bat para
-probar la rama desde "accesos app" y no lo pases a main hasta que te lo pida.
+Guardá un punto de restauración con git antes de cambiar nada, corré los tests, mostrame capturas
+y guardá otro punto al terminar. Recordame cerrar y volver a abrir la app para verlo.
 ```
 
 ## Algo no anda (error al abrir o al usar la app)
 
 ```
-Hola, soy [nombre]. Tengo un problema con la app en [la compu del trabajo / la compu de mi jefe /
-la Mac]. Leé CLAUDE.md y la guía GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md (cómo es cada compu) antes de
-contestar.
+Hola, soy [nombre]. Tengo un problema con la app en [mi compu / la compu de mi jefe]. Leé
+CLAUDE.md y GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md (cómo están armadas las compus) antes de contestar.
 
 Qué hice: [qué acceso directo o comando usé]
 Qué pasó: [pegar lo que dice la ventana negra, o adjuntar captura]
 
-Explicámelo simple y con pasos concretos. Si hace falta cambiar algo del proyecto, hacelo en una
-rama y avisame antes de pasarlo a main.
+Explicámelo simple y con pasos concretos. Si hace falta cambiar algo del proyecto, guardá antes un
+punto de restauración con git.
 ```
 
 ## Cosas generales (apariencia, menú, accesos directos, guías)
@@ -78,7 +57,7 @@ Hola, soy [nombre]. Quiero hacer un cambio general en la app (no de un módulo e
 [explicación]. Leé CLAUDE.md, COMO_TRABAJAR_EN_EL_PROYECTO.md y la guía antes de empezar.
 Si toca archivos compartidos (app.py, .streamlit/config.toml, requirements.txt, README, guías),
 que sea un cambio mínimo y avisame. Para cambios visuales usá la skill frontend-design.
-Mostrame capturas y no lo pases a main hasta que te lo pida.
+Guardá un punto de restauración antes y después, y mostrame capturas.
 ```
 
 ---
@@ -87,7 +66,7 @@ Mostrame capturas y no lo pases a main hasta que te lo pida.
 
 | Para | Decile |
 |---|---|
-| Probar en la compu del trabajo | «Pasame el .bat para probar esta rama desde accesos app.» |
-| Aceptar los cambios | «Pasalo a main.» |
 | Ver cómo quedó sin abrir la app | «Mostrame capturas.» |
-| Cerrar la sesión ordenada | «Resumime qué hicimos, qué falta y actualizá CLAUDE.md si cambió algo del módulo.» |
+| Deshacer lo último | «Volvé al último punto que funcionaba.» |
+| Ver qué se cambió | «Mostrame la lista de puntos de restauración.» |
+| Cerrar ordenado | «Resumime qué hicimos, qué falta, guardá un punto de restauración y actualizá CLAUDE.md si cambió algo del módulo.» |

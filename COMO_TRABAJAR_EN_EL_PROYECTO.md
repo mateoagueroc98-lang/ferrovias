@@ -1,9 +1,8 @@
 # Cómo trabajar en el proyecto (guía para quien lo continúa)
 
-Esta guía es para seguir el proyecto desde cualquier cuenta de Claude: qué es la app, cómo abrirla
-y cómo pedirle cambios a Claude sin perderse. Los comandos exactos para abrir la app están en
-[GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md](GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md); los prompts para empezar
-una conversación, en [PROMPTS_PARA_EMPEZAR.md](PROMPTS_PARA_EMPEZAR.md).
+Qué es la app, cómo abrirla y cómo pedirle cambios a Claude sin perderse. Los comandos para abrir y
+mantener la app están en [GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md](GUIA_ACTUALIZAR_Y_ABRIR_LA_APP.md); los
+prompts para empezar una conversación, en [PROMPTS_PARA_EMPEZAR.md](PROMPTS_PARA_EMPEZAR.md).
 
 ---
 
@@ -23,80 +22,58 @@ El detalle de cada módulo está en el [README](README.md).
 
 ## 2. Dónde está cada cosa
 
-| Qué | Dónde |
-|---|---|
-| El código «oficial» | GitHub: https://github.com/mateoagueroc98-lang/ferrovias |
-| La app en el trabajo | `Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias` (compartida por las compus del trabajo) |
-| Accesos directos para probar versiones nuevas | `Y:\...\Claude\accesos app` |
-| La app en la Mac (casa de Mateo) | `~/ferrovias` |
-| Las reglas que lee Claude | `CLAUDE.md` (Claude lo lee solo al empezar cada conversación) |
+Todo está en **una sola carpeta compartida** (ya no se usa GitHub):
 
-Los Excels, PDFs y la clave de Anthropic (`.env`) **nunca** se suben a GitHub.
+```
+Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias
+```
+
+| Qué | Dónde (dentro de `ferrovias`) |
+|---|---|
+| Las reglas que lee Claude | `CLAUDE.md` (Claude lo lee solo al empezar cada conversación) |
+| Pantallas de cada módulo | `modulos\` |
+| Lógica de cada módulo | `src\` |
+| Configuración de Transcripciones | `config\transcripcion_lg\` |
+| Clave de Anthropic | `.env` (no compartirla) |
+| Historial de cambios (puntos de restauración) | `.git\` (no tocar a mano) |
+
+La usan **dos compus a la vez** (la de Mateo y la del jefe): lo que se cambia, cambia para las dos.
 
 ## 3. Abrir la app
 
-- **Versión estable:** doble clic en el acceso directo **«App Ferrovías»** del escritorio. Baja lo
-  último de GitHub y abre Chrome solo (si Chrome muestra error, esperar y apretar **F5**).
-- **Versión de prueba** (un módulo que todavía no está terminado): un acceso directo
-  «PRUEBA ...» que apunta a un `.bat` de la carpeta `accesos app`. Claude lo arma cuando se lo pedís.
-- **Cerrar:** cerrar la ventana negra. Abrir **uno a la vez** (estable o prueba).
-- Al terminar de probar, abrir una vez **«App Ferrovías»**: la carpeta es compartida y así queda
-  la versión estable para todas las compus.
+- Doble clic en **«App Ferrovías»** del escritorio. A los 20 segundos se abre Chrome (si muestra
+  error, esperar y apretar **F5**).
+- **Cerrar:** cerrar la ventana negra.
+- **Para ver un cambio que hizo Claude:** cerrar la ventana negra y volver a abrir «App Ferrovías».
 
 ## 4. Cómo se le piden cambios a Claude
 
-Hay **dos formas**; el proyecto es el mismo en las dos.
+Se usa la **app de escritorio de Claude, con Claude Code**, en la compu del trabajo, abriendo la
+carpeta `ferrovias` de `Y:`.
 
-- **A. Con GitHub** (como trabajó Mateo): Claude Code en la web (claude.ai/code), eligiendo el
-  repositorio `mateoagueroc98-lang/ferrovias`. Pasos abajo.
-- **B. Directo en la carpeta compartida** (cuando pase a la cuenta del jefe): Claude trabaja sobre la
-  carpeta `ferrovias` de `Y:`, sin GitHub. Ver la sección **4-B**.
-
-### 4-A. Con GitHub
-
-1. **Una conversación (sesión) por módulo.** Si querés tocar dos módulos, abrí dos sesiones.
-2. **Arrancá con un prompt** de [PROMPTS_PARA_EMPEZAR.md](PROMPTS_PARA_EMPEZAR.md): le da a Claude el
-   contexto y le recuerda las reglas.
-3. **Explicá con ejemplos**: qué entra (qué Excel o PDF, qué columnas) y qué tiene que salir. Si podés,
-   adjuntá una captura o un ejemplo **inventado** (sin datos reales).
-4. Claude trabaja en una **rama** (una copia aparte) y te muestra capturas de cómo quedó.
-5. **Probalo** en la compu con el acceso «PRUEBA ...» que te pasa Claude.
-6. Si está bien, decile **«pasalo a main»**. Recién ahí llega a la versión estable y a «App Ferrovías».
-7. Si se agregaron librerías nuevas, Claude te va a pasar un comando para instalarlas
-   (una vez por compu y usuario de Windows).
-
-### 4-B. Directo en la carpeta compartida (sin GitHub)
-
-Se usa Claude **en la compu del trabajo** (app de escritorio de Claude, con Claude Code), abriendo la
-carpeta `Y:\Ingeniería de Mantenimiento\RAMS\PASANTE\_MATEO\Claude\ferrovias`.
-
-- **Los cambios son en vivo**: Claude edita la misma carpeta que usan las dos compus. No hay ramas
-  ni «pasalo a main»; lo que cambia, cambia para todos.
-- **Para ver un cambio**: cerrar la ventana negra y volver a abrir **«App Ferrovías»**.
-- **Puntos de restauración**: Claude guarda cada cambio con `git commit` (queda un historial en la
-  carpeta). Si algo se rompe, pedile «volvé al último punto que funcionaba».
-- **Avisá antes de cambiar algo** si otra persona está usando la app en ese momento.
-- Los accesos directos hacen `git pull`: si ya no hay GitHub y muestra un error, la app abre igual.
-- Arrancá con el prompt **«Carpeta compartida»** de [PROMPTS_PARA_EMPEZAR.md](PROMPTS_PARA_EMPEZAR.md).
-
-### Palabras que vas a ver
-
-| Palabra | Qué significa |
-|---|---|
-| `main` | La versión estable, la que abre «App Ferrovías». |
-| Rama | Una copia aparte donde Claude hace cambios sin tocar `main`. Tiene un nombre como `claude/...`. |
-| Pull request (PR) | El pedido de pasar los cambios de una rama a `main`. |
-| Merge / unir | Aceptar ese pedido: los cambios pasan a `main`. |
-| `git pull` | Bajar a la carpeta lo último de GitHub (los accesos directos lo hacen solos). |
+1. **Una conversación por tema o módulo.** Y **una sola conversación cambiando la carpeta a la vez**
+   (entre las dos compus): si Mateo y el jefe le piden cambios a Claude al mismo tiempo, se pisan.
+2. **Arrancá con un prompt** de [PROMPTS_PARA_EMPEZAR.md](PROMPTS_PARA_EMPEZAR.md): le da a Claude
+   el contexto y le recuerda las reglas.
+3. **Explicá con ejemplos**: qué entra (qué Excel o PDF, qué columnas) y qué tiene que salir. Si
+   podés, adjuntá una captura.
+4. Claude **guarda un punto de restauración antes de cambiar** y otro después de cada cambio que
+   funciona.
+5. **Probalo**: cerrá y volvé a abrir «App Ferrovías».
+6. **Los cambios son en vivo**: apenas Claude los guarda, la otra compu también los tiene (al
+   reabrir la app). Si alguien está usando la app en ese momento, avisale antes.
+7. Si algo se rompe, decile a Claude **«volvé al último punto que funcionaba»**.
+8. Si se agregaron librerías nuevas, Claude te va a pasar un comando para instalarlas (una vez por
+   compu y usuario de Windows).
 
 ## 5. Si algo no anda
 
 | Pasa esto | Hacé esto |
 |---|---|
 | Chrome dice «No se puede acceder a este sitio» | Esperar unos segundos y apretar **F5**: la app tarda en arrancar desde la red. |
-| La ventana negra dice `No module named ...` | Faltan librerías: `py -3.13 -m pip install --user -r requirements.txt` en la carpeta (o pedirle el comando a Claude). |
-| `git` dice «dubious ownership» o «could not lock config file» | Falta la configuración de Git de esa compu: ver «Instalación» en la guía. |
-| No aparece el módulo nuevo | Todavía no está en `main`: abrí el acceso «PRUEBA ...» o pedile a Claude que lo pase a `main`. |
+| La ventana negra dice `No module named ...` | Faltan librerías: ver «Si aparece un error de que falta algo» en la guía. |
+| No se ve un cambio que hizo Claude | Cerrar la ventana negra y volver a abrir «App Ferrovías». |
+| Algo dejó de funcionar después de un cambio | Pedirle a Claude que vuelva al último punto que funcionaba. |
 | Cualquier otro error | Copiá lo que dice la ventana negra (o una captura) y pegáselo a Claude. |
 
 No tocar el botón **Deploy** de la app: la publicaría en internet.
